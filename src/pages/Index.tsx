@@ -1,16 +1,42 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useNavigate } from "react-router-dom";
+import Particles from "@/components/Particles";
+import FeatureCards from "@/components/FeatureCards";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const navigate = useNavigate();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen hero-gradient relative overflow-hidden">
+      <Particles />
+
+      {/* Hero */}
+      <section className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
+        <h1 className="text-6xl md:text-8xl font-black text-foreground tracking-tight fade-up">
+          GoalMate
+        </h1>
+
+        <p className="mt-4 text-xl md:text-2xl font-medium text-secondary fade-up fade-up-delay-1">
+          Ek goal, ek dost, ek naya safar
+        </p>
+
+        <button
+          onClick={() => navigate("/goal-setup")}
+          className="mt-10 glow-button bg-primary text-primary-foreground px-10 py-4 text-lg fade-up fade-up-delay-2"
+        >
+          Start Your Journey
+        </button>
+
+        <div className="mt-8 glass-card px-6 py-3 fade-up fade-up-delay-3">
+          <p className="text-sm text-muted-foreground">
+            <span className="text-secondary font-bold text-lg">2,847</span>{" "}
+            people chasing goals right now
+          </p>
+        </div>
+      </section>
+
+      <FeatureCards />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
