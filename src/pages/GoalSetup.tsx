@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import Particles from "@/components/Particles";
 
 const categories = [
-  { emoji: "💪", label: "Fitness" },
-  { emoji: "💼", label: "Career" },
-  { emoji: "📚", label: "Learning" },
-  { emoji: "💡", label: "Business" },
-  { emoji: "❤️", label: "Health" },
-  { emoji: "🎨", label: "Creative" },
+  { emoji: "💪", label: "Fitness", glow: "hsla(258, 100%, 62%, 0.15)" },
+  { emoji: "💼", label: "Career", glow: "hsla(40, 100%, 55%, 0.12)" },
+  { emoji: "📚", label: "Learning", glow: "hsla(200, 100%, 55%, 0.12)" },
+  { emoji: "💡", label: "Business", glow: "hsla(50, 100%, 55%, 0.12)" },
+  { emoji: "❤️", label: "Health", glow: "hsla(0, 100%, 65%, 0.12)" },
+  { emoji: "🎨", label: "Creative", glow: "hsla(280, 100%, 60%, 0.12)" },
 ];
 
 const GoalSetup = () => {
@@ -21,10 +21,17 @@ const GoalSetup = () => {
     <div className="min-h-screen hero-gradient relative overflow-hidden flex items-center justify-center px-6">
       <Particles />
 
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-15 blur-[100px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle, hsla(258, 100%, 62%, 0.5), transparent 70%)' }}
+      />
+
       <div className="relative z-10 w-full max-w-2xl">
         {step === "category" ? (
           <div className="fade-up text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
+            <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-widest uppercase glass-card text-muted-foreground mb-4">
+              Step 1 of 2
+            </span>
+            <h2 className="text-3xl md:text-5xl font-black text-gradient-hero mb-2 tracking-tight">
               What area do you want to crush?
             </h2>
             <p className="text-muted-foreground mb-10">Pick your category to get started</p>
@@ -37,24 +44,32 @@ const GoalSetup = () => {
                     setSelected(cat.label);
                     setTimeout(() => setStep("goal"), 300);
                   }}
-                  className={`glass-card p-6 text-center transition-all duration-300 hover:scale-105 ${
+                  className={`glass-card-glow p-6 text-center group ${
                     selected === cat.label
                       ? "ring-2 ring-primary scale-105"
-                      : "hover:border-primary/30"
+                      : ""
                   }`}
                 >
-                  <div className="text-4xl mb-2">{cat.emoji}</div>
-                  <div className="text-foreground font-semibold">{cat.label}</div>
+                  <div
+                    className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center text-3xl transition-transform duration-300 group-hover:scale-110"
+                    style={{ background: cat.glow }}
+                  >
+                    {cat.emoji}
+                  </div>
+                  <div className="text-foreground font-semibold text-sm">{cat.label}</div>
                 </button>
               ))}
             </div>
           </div>
         ) : (
           <div className="fade-up text-center">
+            <span className="inline-block px-4 py-1.5 rounded-full text-xs font-semibold tracking-widest uppercase glass-card text-muted-foreground mb-4">
+              Step 2 of 2
+            </span>
             <div className="text-5xl mb-4">
               {categories.find((c) => c.label === selected)?.emoji}
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
+            <h2 className="text-3xl md:text-4xl font-black text-gradient-hero mb-2 tracking-tight">
               What's your {selected.toLowerCase()} goal?
             </h2>
             <p className="text-muted-foreground mb-8">Be specific — your GoalMate needs to know!</p>
@@ -69,7 +84,7 @@ const GoalSetup = () => {
             <button
               onClick={() => goal.trim() && navigate("/signup", { state: { category: selected, goal } })}
               disabled={!goal.trim()}
-              className="mt-6 glow-button bg-primary text-primary-foreground px-10 py-4 text-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+              className="mt-6 glow-button text-primary-foreground px-10 py-4 text-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
             >
               Next →
             </button>
