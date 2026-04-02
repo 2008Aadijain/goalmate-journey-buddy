@@ -7,23 +7,28 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const GoalSetup = () => {
   const navigate = useNavigate();
+  const { signUp } = useAuth();
+  const { toast } = useToast();
   const [step, setStep] = useState<"goal" | "custom" | "deadline" | "signup">("goal");
-  const [selectedGoal, setSelectedGoal] = useState<{ id: string; label: string; emoji: string } | null>(null);
+  const [selectedGoal, setSelectedGoal] = useState<{ id: string; label: string; emoji: string; category?: string } | null>(null);
   const [customGoal, setCustomGoal] = useState("");
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
-  const handleGoalSelect = (goal: { id: string; label: string; emoji: string }) => {
+  const handleGoalSelect = (goal: typeof presetGoals[0]) => {
     setSelectedGoal(goal);
     setTimeout(() => setStep("deadline"), 300);
   };
 
   const handleCustomGoalSubmit = () => {
     if (!customGoal.trim()) return;
-    setSelectedGoal({ id: "custom", label: customGoal, emoji: "✨" });
+    setSelectedGoal({ id: "custom", label: customGoal, emoji: "✨", category: "Custom" });
     setStep("deadline");
   };
 
@@ -32,15 +37,25 @@ const GoalSetup = () => {
     setStep("signup");
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const userData = {
-      ...form,
-      goal: selectedGoal,
-      deadline: deadline?.toISOString(),
-      isCustom: selectedGoal?.id === "custom",
-    };
-    localStorage.setItem("goalmate_user", JSON.stringify(userData));
+    if (!selectedGoal) return;
+    setLoading(true);
+
+    const { error } = await signUp(form.email, form.password, {
+      name: form.name,
+      goalCategory: selectedGoal.category || selectedGoal.id,
+      goalLabel: selectedGoal.label,
+      goalEmoji: selectedGoal.emoji,
+      deadline: deadline ? deadline.toISOString().split("T")[0] : null,
+      isCustom: selectedGoal.id === "custom",
+    });
+
+    setLoading(false);
+    if (error) {
+      toast({ title: "Signup failed", description: error, variant: "destructive" });
+      return;
+    }
     navigate("/dashboard");
   };
 
@@ -178,7 +193,6 @@ const GoalSetup = () => {
               </Popover>
             </div>
 
-            {/* Quick options */}
             <div className="flex gap-2 justify-center flex-wrap mb-8">
               {[
                 { label: "30 days", days: 30 },
@@ -225,7 +239,6 @@ const GoalSetup = () => {
               <p className="text-muted-foreground mt-2">Create your account to start crushing it</p>
             </div>
 
-            {/* Goal summary */}
             <div className="glass-card p-4 mb-6 flex items-center gap-3">
               <span className="text-2xl">{selectedGoal?.emoji}</span>
               <div className="flex-1 min-w-0">
@@ -248,6 +261,7 @@ const GoalSetup = () => {
                     type={field.type}
                     placeholder={field.placeholder}
                     required
+                    minLength={field.key === "password" ? 6 : undefined}
                     value={form[field.key as keyof typeof form]}
                     onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                     className="w-full bg-transparent border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
@@ -257,9 +271,10 @@ const GoalSetup = () => {
 
               <button
                 type="submit"
-                className="w-full glow-button text-primary-foreground py-4 text-lg font-bold"
+                disabled={loading}
+                className="w-full glow-button text-primary-foreground py-4 text-lg font-bold disabled:opacity-60"
               >
-                Let's Go! 🔥
+                {loading ? "Creating account..." : "Let's Go! 🔥"}
               </button>
             </form>
 

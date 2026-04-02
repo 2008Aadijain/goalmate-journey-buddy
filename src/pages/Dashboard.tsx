@@ -1,90 +1,181 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, Flame, Target, Users, Calendar, ChevronRight } from "lucide-react";
+import { Bell, Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, LogOut } from "lucide-react";
 import { getDayTask } from "@/data/roadmaps";
 import { cn } from "@/lib/utils";
-
-interface UserData {
-  name: string;
-  email: string;
-  goal: { id: string; label: string; emoji: string };
-  deadline: string;
-  isCustom: boolean;
-}
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<UserData | null>(null);
+  const { user, profile, loading, signOut, refreshProfile } = useAuth();
   const [checkinText, setCheckinText] = useState("");
-  const [streak, setStreak] = useState(1);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [taskComplete, setTaskComplete] = useState(false);
-  const [currentDay, setCurrentDay] = useState(1);
+  const [match, setMatch] = useState<Tables<"matches"> | null>(null);
+  const [matchProfile, setMatchProfile] = useState<Tables<"profiles"> | null>(null);
+  const [unreadDM, setUnreadDM] = useState(0);
 
   useEffect(() => {
-    const stored = localStorage.getItem("goalmate_user");
-    if (!stored) {
+    if (!loading && !user) {
       navigate("/goal-setup");
-      return;
     }
-    const parsed = JSON.parse(stored) as UserData;
-    setUser(parsed);
+  }, [loading, user, navigate]);
 
-    // Load streak & day
-    const savedStreak = localStorage.getItem("goalmate_streak");
-    const savedDay = localStorage.getItem("goalmate_day");
-    const savedCheckin = localStorage.getItem("goalmate_checkin_date");
-    const savedTaskDone = localStorage.getItem("goalmate_task_done_day");
-
-    if (savedStreak) setStreak(parseInt(savedStreak));
-    if (savedDay) setCurrentDay(parseInt(savedDay));
+  // Load check-in state from localStorage (per-user)
+  useEffect(() => {
+    if (!user) return;
+    const savedCheckin = localStorage.getItem(`gm_checkin_${user.id}`);
+    const savedTaskDay = localStorage.getItem(`gm_task_done_${user.id}`);
     if (savedCheckin === new Date().toDateString()) setTodayCheckedIn(true);
-    if (savedTaskDone === String(savedDay || 1)) setTaskComplete(true);
-  }, [navigate]);
+    if (profile && savedTaskDay === String(profile.current_day)) setTaskComplete(true);
+  }, [user, profile]);
+
+  // Find or create match
+  useEffect(() => {
+    if (!user || !profile) return;
+
+    const findMatch = async () => {
+      // Check existing matches
+      const { data: existing } = await supabase
+        .from("matches")
+        .select("*")
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .eq("status", "active")
+        .limit(1)
+        .single();
+
+      if (existing) {
+        setMatch(existing);
+        const partnerId = existing.user1_id === user.id ? existing.user2_id : existing.user1_id;
+        const { data: partner } = await supabase.from("profiles").select("*").eq("user_id", partnerId).single();
+        if (partner) setMatchProfile(partner);
+        return;
+      }
+
+      // Find unmatched user with same category
+      const { data: candidates } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("goal_category", profile.goal_category)
+        .neq("user_id", user.id)
+        .limit(10);
+
+      if (!candidates || candidates.length === 0) return;
+
+      // Check which candidates are already matched
+      for (const candidate of candidates) {
+        const { data: existingMatch } = await supabase
+          .from("matches")
+          .select("id")
+          .or(`user1_id.eq.${candidate.user_id},user2_id.eq.${candidate.user_id}`)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingMatch) {
+          // Create match
+          const { data: newMatch } = await supabase
+            .from("matches")
+            .insert({ user1_id: user.id, user2_id: candidate.user_id, goal_category: profile.goal_category })
+            .select()
+            .single();
+          if (newMatch) {
+            setMatch(newMatch);
+            setMatchProfile(candidate);
+          }
+          return;
+        }
+      }
+    };
+
+    findMatch();
+  }, [user, profile]);
+
+  // Count unread DMs
+  useEffect(() => {
+    if (!match || !user) return;
+    const countUnread = async () => {
+      const { count } = await supabase
+        .from("direct_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("match_id", match.id)
+        .neq("sender_id", user.id)
+        .eq("read", false);
+      setUnreadDM(count || 0);
+    };
+    countUnread();
+
+    const channel = supabase
+      .channel(`unread-${match.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages", filter: `match_id=eq.${match.id}` }, () => {
+        countUnread();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [match, user]);
 
   const daysLeft = useMemo(() => {
-    if (!user?.deadline) return 30;
-    const diff = new Date(user.deadline).getTime() - Date.now();
+    if (!profile?.deadline) return 30;
+    const diff = new Date(profile.deadline).getTime() - Date.now();
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-  }, [user]);
+  }, [profile]);
 
   const totalDays = useMemo(() => {
-    if (!user?.deadline) return 30;
+    if (!profile?.deadline) return 30;
+    const currentDay = profile.current_day;
     const signupDate = new Date();
     signupDate.setDate(signupDate.getDate() - (currentDay - 1));
-    const diff = new Date(user.deadline).getTime() - signupDate.getTime();
+    const diff = new Date(profile.deadline).getTime() - signupDate.getTime();
     return Math.max(30, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-  }, [user, currentDay]);
+  }, [profile]);
 
   const progress = Math.min(100, Math.round(((totalDays - daysLeft) / totalDays) * 100));
 
   const todayTask = useMemo(() => {
-    if (!user) return null;
-    if (user.isCustom) {
+    if (!profile) return null;
+    const currentDay = profile.current_day;
+    if (profile.is_custom) {
       return { day: currentDay, task: `Day ${currentDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
     }
-    return getDayTask(user.goal.id, currentDay);
-  }, [user, currentDay]);
+    return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), currentDay) ||
+      getDayTask(profile.goal_category.toLowerCase(), currentDay);
+  }, [profile]);
 
-  const handleCheckin = () => {
-    if (!checkinText.trim()) return;
-    const newStreak = streak + 1;
-    setStreak(newStreak);
+  const handleCheckin = async () => {
+    if (!checkinText.trim() || !user || !profile) return;
+    const newStreak = profile.streak + 1;
     setTodayCheckedIn(true);
-    localStorage.setItem("goalmate_streak", String(newStreak));
-    localStorage.setItem("goalmate_checkin_date", new Date().toDateString());
+    localStorage.setItem(`gm_checkin_${user.id}`, new Date().toDateString());
     setCheckinText("");
+    await supabase.from("profiles").update({ streak: newStreak }).eq("user_id", user.id);
+    refreshProfile();
   };
 
-  const handleTaskComplete = () => {
+  const handleTaskComplete = async () => {
+    if (!user || !profile) return;
     setTaskComplete(true);
-    const newDay = currentDay + 1;
-    setCurrentDay(newDay);
-    localStorage.setItem("goalmate_day", String(newDay));
-    localStorage.setItem("goalmate_task_done_day", String(currentDay));
+    const newDay = profile.current_day + 1;
+    localStorage.setItem(`gm_task_done_${user.id}`, String(profile.current_day));
+    await supabase.from("profiles").update({ current_day: newDay }).eq("user_id", user.id);
+    refreshProfile();
   };
 
-  if (!user) return null;
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  if (loading || !profile) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-3 animate-pulse">🎯</div>
+        <p className="text-muted-foreground text-sm">Loading...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,10 +184,9 @@ const Dashboard = () => {
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
           <h1 className="text-xl font-black text-gradient-hero">GoalMate</h1>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground font-medium">Hi, {user.name.split(" ")[0]}</span>
-            <button className="relative p-2 rounded-full glass-card">
-              <Bell className="w-4 h-4 text-muted-foreground" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-secondary" />
+            <span className="text-sm text-muted-foreground font-medium">Hi, {profile.name.split(" ")[0]}</span>
+            <button onClick={handleLogout} className="p-2 rounded-full glass-card">
+              <LogOut className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
         </div>
@@ -119,19 +209,18 @@ const Dashboard = () => {
                 <Target className="w-4 h-4 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-primary">My Goal</span>
               </div>
-              <span className="text-2xl">{user.goal.emoji}</span>
+              <span className="text-2xl">{profile.goal_emoji}</span>
             </div>
-            <h3 className="text-lg font-bold text-foreground mb-3">{user.goal.label}</h3>
+            <h3 className="text-lg font-bold text-foreground mb-3">{profile.goal_label}</h3>
             <div className="flex items-center gap-4 mb-3">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground font-medium">{daysLeft} days left</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium">Day {currentDay}</span>
+                <span className="text-xs text-muted-foreground font-medium">Day {profile.current_day}</span>
               </div>
             </div>
-            {/* Progress bar */}
             <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500"
@@ -157,7 +246,7 @@ const Dashboard = () => {
               style={{ background: 'hsla(0, 100%, 71%, 0.15)' }}
             >
               <Flame className="w-3.5 h-3.5 text-secondary" />
-              <span className="text-sm font-bold text-secondary">{streak}</span>
+              <span className="text-sm font-bold text-secondary">{profile.streak}</span>
             </div>
           </div>
 
@@ -165,7 +254,7 @@ const Dashboard = () => {
             <div className="text-center py-4">
               <div className="text-4xl mb-2">🔥</div>
               <p className="text-foreground font-semibold">You're on fire!</p>
-              <p className="text-muted-foreground text-xs mt-1">{streak} day streak — keep it going!</p>
+              <p className="text-muted-foreground text-xs mt-1">{profile.streak} day streak — keep it going!</p>
             </div>
           ) : (
             <>
@@ -202,22 +291,75 @@ const Dashboard = () => {
               <span className="text-xs font-semibold uppercase tracking-wider text-secondary">Your GoalMate</span>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                <Users className="w-5 h-5 text-muted-foreground" />
+            {matchProfile ? (
+              <div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                    style={{ background: 'hsla(0, 100%, 71%, 0.2)' }}
+                  >
+                    {matchProfile.goal_emoji}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-foreground font-semibold text-sm">{matchProfile.name}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{matchProfile.goal_label}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Flame className="w-3 h-3 text-secondary" />
+                      <span className="text-xs text-secondary font-semibold">{matchProfile.streak} day streak</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/chat/${match?.id}`)}
+                  className="mt-4 w-full glass-card flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-foreground hover:bg-primary/10 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Chat with {matchProfile.name.split(" ")[0]}
+                  {unreadDM > 0 && (
+                    <span className="ml-1 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-xs font-bold flex items-center justify-center">
+                      {unreadDM}
+                    </span>
+                  )}
+                </button>
               </div>
-              <div className="flex-1">
-                <p className="text-foreground font-semibold text-sm">Finding your GoalMate...</p>
-                <p className="text-muted-foreground text-xs mt-0.5">We're matching you with someone on the same mission</p>
+            ) : (
+              <div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                    <Users className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-foreground font-semibold text-sm">Finding your GoalMate...</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">We're matching you with someone on the same mission</p>
+                  </div>
+                </div>
+                <div className="mt-4 h-1 rounded-full bg-muted/50 overflow-hidden">
+                  <div className="h-full rounded-full bg-secondary/60 animate-pulse" style={{ width: '65%' }} />
+                </div>
               </div>
-            </div>
-
-            {/* Fake loading animation */}
-            <div className="mt-4 h-1 rounded-full bg-muted/50 overflow-hidden">
-              <div className="h-full rounded-full bg-secondary/60 animate-pulse" style={{ width: '65%' }} />
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Group Chat Card */}
+        <button
+          onClick={() => navigate("/group-chat")}
+          className="w-full glass-card-glow p-5 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                style={{ background: 'hsla(258, 100%, 62%, 0.2)' }}
+              >
+                <Users className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-foreground font-semibold text-sm">{profile.goal_category} Group Chat</p>
+                <p className="text-muted-foreground text-xs">Connect with everyone chasing the same goal</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+        </button>
 
         {/* Today's Roadmap Task */}
         {todayTask && (
