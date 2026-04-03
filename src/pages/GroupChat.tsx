@@ -8,7 +8,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 const GroupChat = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [messages, setMessages] = useState<Tables<"group_messages">[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [memberCount, setMemberCount] = useState(0);
@@ -69,6 +69,15 @@ const GroupChat = () => {
       content,
     });
   };
+
+  if (loading || !profile) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-3 animate-pulse">💬</div>
+        <p className="text-muted-foreground text-sm">Loading group chat...</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

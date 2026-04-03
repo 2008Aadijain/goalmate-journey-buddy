@@ -15,6 +15,7 @@ interface AuthContextType {
     deadline: string | null;
     isCustom: boolean;
   }) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -71,8 +72,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       isCustom: boolean;
     }
   ) => {
+    // First try to sign in (existing user)
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInData?.user) {
+      await fetchProfile(signInData.user.id);
+      return { error: null };
+    }
+
+    // If wrong password for existing user
+    if (signInError && signInError.message !== "Invalid login credentials") {
+      return { error: signInError.message };
+    }
+
+    // Try signup
     const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message.includes("already registered")) {
+        return { error: "Account exists but password is incorrect. Try a different password." };
+      }
+      return { error: error.message };
+    }
     if (!data.user) return { error: "Signup failed" };
 
     const { error: profileError } = await supabase.from("profiles").insert({
@@ -90,6 +109,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error: null };
   };
 
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -101,7 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

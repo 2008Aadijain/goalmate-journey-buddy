@@ -23,13 +23,27 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
-  // Load check-in state from localStorage (per-user)
+  // Load check-in state from database (per-user, per-day)
   useEffect(() => {
-    if (!user) return;
-    const savedCheckin = localStorage.getItem(`gm_checkin_${user.id}`);
+    if (!user || !profile) return;
+    const checkTodayCheckin = async () => {
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+      
+      const { count } = await supabase
+        .from("check_ins")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", startOfDay)
+        .lt("created_at", endOfDay);
+      
+      if (count && count > 0) setTodayCheckedIn(true);
+    };
+    checkTodayCheckin();
+
     const savedTaskDay = localStorage.getItem(`gm_task_done_${user.id}`);
-    if (savedCheckin === new Date().toDateString()) setTodayCheckedIn(true);
-    if (profile && savedTaskDay === String(profile.current_day)) setTaskComplete(true);
+    if (savedTaskDay === String(profile.current_day)) setTaskComplete(true);
   }, [user, profile]);
 
   // Find or create match
@@ -145,10 +159,9 @@ const Dashboard = () => {
   }, [profile]);
 
   const handleCheckin = async () => {
-    if (!checkinText.trim() || !user || !profile) return;
+    if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
     const newStreak = profile.streak + 1;
     setTodayCheckedIn(true);
-    localStorage.setItem(`gm_checkin_${user.id}`, new Date().toDateString());
     // Post to progress wall
     await supabase.from("check_ins").insert({
       user_id: user.id,
@@ -165,7 +178,7 @@ const Dashboard = () => {
   };
 
   const handleTaskComplete = async () => {
-    if (!user || !profile) return;
+    if (!user || !profile || taskComplete || todayCheckedIn === false) return;
     setTaskComplete(true);
     const newDay = profile.current_day + 1;
     localStorage.setItem(`gm_task_done_${user.id}`, String(profile.current_day));
@@ -190,7 +203,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl border-b border-border/50 bg-background/80">
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-background">
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
           <h1 className="text-xl font-black text-gradient-hero">GoalMate</h1>
           <div className="flex items-center gap-3">
@@ -424,7 +437,7 @@ const Dashboard = () => {
         <div className="h-20" />
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t border-border/50 bg-background/90">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background">
         <div className="flex items-center justify-around max-w-lg mx-auto py-2">
           <button onClick={() => navigate("/dashboard")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
             <Target className="w-5 h-5 text-primary" />
