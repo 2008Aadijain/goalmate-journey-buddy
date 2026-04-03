@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          badge_description: string
+          badge_emoji: string
+          badge_name: string
+          earned_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          badge_description: string
+          badge_emoji: string
+          badge_name: string
+          earned_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          badge_description?: string
+          badge_emoji?: string
+          badge_name?: string
+          earned_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      check_in_reactions: {
+        Row: {
+          check_in_id: string
+          created_at: string
+          id: string
+          reaction_type: string
+          user_id: string
+        }
+        Insert: {
+          check_in_id: string
+          created_at?: string
+          id?: string
+          reaction_type: string
+          user_id: string
+        }
+        Update: {
+          check_in_id?: string
+          created_at?: string
+          id?: string
+          reaction_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_in_reactions_check_in_id_fkey"
+            columns: ["check_in_id"]
+            isOneToOne: false
+            referencedRelation: "check_ins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      check_ins: {
+        Row: {
+          content: string
+          created_at: string
+          goal_category: string
+          goal_emoji: string
+          goal_label: string
+          id: string
+          streak_at_time: number
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          goal_category: string
+          goal_emoji?: string
+          goal_label: string
+          id?: string
+          streak_at_time?: number
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          goal_category?: string
+          goal_emoji?: string
+          goal_label?: string
+          id?: string
+          streak_at_time?: number
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: []
+      }
       direct_messages: {
         Row: {
           content: string
