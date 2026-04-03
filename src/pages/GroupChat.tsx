@@ -70,6 +70,15 @@ const GroupChat = () => {
     });
   };
 
+  if (loading || !profile) return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-3 animate-pulse">💬</div>
+        <p className="text-muted-foreground text-sm">Loading group chat...</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
