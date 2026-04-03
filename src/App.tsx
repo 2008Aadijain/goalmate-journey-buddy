@@ -9,6 +9,8 @@ import GoalSetup from "./pages/GoalSetup.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import DirectChat from "./pages/DirectChat.tsx";
 import GroupChat from "./pages/GroupChat.tsx";
+import ProgressWall from "./pages/ProgressWall.tsx";
+import Profile from "./pages/Profile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
