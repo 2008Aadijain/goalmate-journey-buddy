@@ -203,7 +203,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl border-b border-border/50 bg-background/80">
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-background">
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
           <h1 className="text-xl font-black text-gradient-hero">GoalMate</h1>
           <div className="flex items-center gap-3">
