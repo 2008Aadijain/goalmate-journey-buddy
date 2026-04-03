@@ -149,6 +149,16 @@ const Dashboard = () => {
     const newStreak = profile.streak + 1;
     setTodayCheckedIn(true);
     localStorage.setItem(`gm_checkin_${user.id}`, new Date().toDateString());
+    // Post to progress wall
+    await supabase.from("check_ins").insert({
+      user_id: user.id,
+      user_name: profile.name,
+      goal_category: profile.goal_category,
+      goal_label: profile.goal_label,
+      goal_emoji: profile.goal_emoji,
+      content: checkinText,
+      streak_at_time: newStreak,
+    });
     setCheckinText("");
     await supabase.from("profiles").update({ streak: newStreak }).eq("user_id", user.id);
     refreshProfile();
