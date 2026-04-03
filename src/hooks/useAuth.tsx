@@ -15,6 +15,7 @@ interface AuthContextType {
     deadline: string | null;
     isCustom: boolean;
   }) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
