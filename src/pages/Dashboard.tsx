@@ -420,7 +420,30 @@ const Dashboard = () => {
             )}
           </div>
         )}
+        {/* Bottom Nav */}
+        <div className="h-20" />
       </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t border-border/50 bg-background/90">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-2">
+          <button onClick={() => navigate("/dashboard")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
+            <Target className="w-5 h-5 text-primary" />
+            <span className="text-[10px] font-semibold text-primary">Home</span>
+          </button>
+          <button onClick={() => navigate("/progress-wall")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
+            <Globe className="w-5 h-5 text-muted-foreground" />
+            <span className="text-[10px] font-semibold text-muted-foreground">Wall</span>
+          </button>
+          <button onClick={() => navigate("/group-chat")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
+            <Users className="w-5 h-5 text-muted-foreground" />
+            <span className="text-[10px] font-semibold text-muted-foreground">Group</span>
+          </button>
+          <button onClick={() => navigate("/profile")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
+            <User className="w-5 h-5 text-muted-foreground" />
+            <span className="text-[10px] font-semibold text-muted-foreground">Profile</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };
