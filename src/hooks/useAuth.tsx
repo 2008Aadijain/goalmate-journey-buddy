@@ -72,8 +72,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       isCustom: boolean;
     }
   ) => {
+    // First try to sign in (existing user)
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInData?.user) {
+      await fetchProfile(signInData.user.id);
+      return { error: null };
+    }
+
+    // If wrong password for existing user
+    if (signInError && signInError.message !== "Invalid login credentials") {
+      return { error: signInError.message };
+    }
+
+    // Try signup
     const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message.includes("already registered")) {
+        return { error: "Account exists but password is incorrect. Try a different password." };
+      }
+      return { error: error.message };
+    }
     if (!data.user) return { error: "Signup failed" };
 
     const { error: profileError } = await supabase.from("profiles").insert({
@@ -88,6 +106,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (profileError) return { error: profileError.message };
     await fetchProfile(data.user.id);
+    return { error: null };
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
     return { error: null };
   };
 
