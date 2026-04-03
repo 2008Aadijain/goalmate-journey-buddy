@@ -437,7 +437,7 @@ const Dashboard = () => {
         <div className="h-20" />
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl border-t border-border/50 bg-background/90">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background">
         <div className="flex items-center justify-around max-w-lg mx-auto py-2">
           <button onClick={() => navigate("/dashboard")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
             <Target className="w-5 h-5 text-primary" />
