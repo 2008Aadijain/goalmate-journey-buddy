@@ -178,7 +178,7 @@ const Dashboard = () => {
   };
 
   const handleTaskComplete = async () => {
-    if (!user || !profile) return;
+    if (!user || !profile || taskComplete || todayCheckedIn === false) return;
     setTaskComplete(true);
     const newDay = profile.current_day + 1;
     localStorage.setItem(`gm_task_done_${user.id}`, String(profile.current_day));
