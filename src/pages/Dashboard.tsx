@@ -159,10 +159,9 @@ const Dashboard = () => {
   }, [profile]);
 
   const handleCheckin = async () => {
-    if (!checkinText.trim() || !user || !profile) return;
+    if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
     const newStreak = profile.streak + 1;
     setTodayCheckedIn(true);
-    localStorage.setItem(`gm_checkin_${user.id}`, new Date().toDateString());
     // Post to progress wall
     await supabase.from("check_ins").insert({
       user_id: user.id,
