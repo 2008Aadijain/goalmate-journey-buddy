@@ -23,13 +23,27 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
-  // Load check-in state from localStorage (per-user)
+  // Load check-in state from database (per-user, per-day)
   useEffect(() => {
-    if (!user) return;
-    const savedCheckin = localStorage.getItem(`gm_checkin_${user.id}`);
+    if (!user || !profile) return;
+    const checkTodayCheckin = async () => {
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+      
+      const { count } = await supabase
+        .from("check_ins")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", startOfDay)
+        .lt("created_at", endOfDay);
+      
+      if (count && count > 0) setTodayCheckedIn(true);
+    };
+    checkTodayCheckin();
+
     const savedTaskDay = localStorage.getItem(`gm_task_done_${user.id}`);
-    if (savedCheckin === new Date().toDateString()) setTodayCheckedIn(true);
-    if (profile && savedTaskDay === String(profile.current_day)) setTaskComplete(true);
+    if (savedTaskDay === String(profile.current_day)) setTaskComplete(true);
   }, [user, profile]);
 
   // Find or create match
