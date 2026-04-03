@@ -8,7 +8,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 const GroupChat = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [messages, setMessages] = useState<Tables<"group_messages">[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [memberCount, setMemberCount] = useState(0);
