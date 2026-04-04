@@ -193,6 +193,10 @@ const Dashboard = () => {
   }, [profile, calculatedDay]);
 
   const todayQuote = useMemo(() => MOTIVATION_QUOTES[new Date().getDate() % MOTIVATION_QUOTES.length], []);
+  const todayNudge = useMemo(() => {
+    if (!profile) return "";
+    return getSmartNudge(profile.goal_category, calculatedDay);
+  }, [profile, calculatedDay]);
 
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
