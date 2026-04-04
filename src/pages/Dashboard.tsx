@@ -150,10 +150,9 @@ const Dashboard = () => {
 
   const totalDays = useMemo(() => {
     if (!profile?.deadline) return 30;
-    const currentDay = profile.current_day;
-    const signupDate = new Date();
-    signupDate.setDate(signupDate.getDate() - (currentDay - 1));
-    const diff = new Date(profile.deadline).getTime() - signupDate.getTime();
+    const created = new Date(profile.created_at);
+    const createdDate = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    const diff = new Date(profile.deadline).getTime() - createdDate.getTime();
     return Math.max(30, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }, [profile]);
 
