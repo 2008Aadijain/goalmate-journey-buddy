@@ -23,6 +23,17 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
+  // Calculate current_day from signup date (calendar days since profile creation)
+  const calculatedDay = useMemo(() => {
+    if (!profile) return 1;
+    const created = new Date(profile.created_at);
+    const createdDate = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    const today = new Date();
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffDays = Math.floor((todayDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays + 1); // Day 1 on signup day
+  }, [profile]);
+
   // Load check-in state from database (per-user, per-day)
   useEffect(() => {
     if (!user || !profile) return;
@@ -38,12 +49,12 @@ const Dashboard = () => {
         .gte("created_at", startOfDay)
         .lt("created_at", endOfDay);
       
-      if (count && count > 0) setTodayCheckedIn(true);
+      if (count && count > 0) {
+        setTodayCheckedIn(true);
+        setTaskComplete(true); // Task is done if checked in today
+      }
     };
     checkTodayCheckin();
-
-    const savedTaskDay = localStorage.getItem(`gm_task_done_${user.id}`);
-    if (savedTaskDay === String(profile.current_day)) setTaskComplete(true);
   }, [user, profile]);
 
   // Find or create match
@@ -139,10 +150,9 @@ const Dashboard = () => {
 
   const totalDays = useMemo(() => {
     if (!profile?.deadline) return 30;
-    const currentDay = profile.current_day;
-    const signupDate = new Date();
-    signupDate.setDate(signupDate.getDate() - (currentDay - 1));
-    const diff = new Date(profile.deadline).getTime() - signupDate.getTime();
+    const created = new Date(profile.created_at);
+    const createdDate = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    const diff = new Date(profile.deadline).getTime() - createdDate.getTime();
     return Math.max(30, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }, [profile]);
 
@@ -150,13 +160,12 @@ const Dashboard = () => {
 
   const todayTask = useMemo(() => {
     if (!profile) return null;
-    const currentDay = profile.current_day;
     if (profile.is_custom) {
-      return { day: currentDay, task: `Day ${currentDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
+      return { day: calculatedDay, task: `Day ${calculatedDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
     }
-    return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), currentDay) ||
-      getDayTask(profile.goal_category.toLowerCase(), currentDay);
-  }, [profile]);
+    return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), calculatedDay) ||
+      getDayTask(profile.goal_category.toLowerCase(), calculatedDay);
+  }, [profile, calculatedDay]);
 
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
@@ -177,13 +186,10 @@ const Dashboard = () => {
     refreshProfile();
   };
 
-  const handleTaskComplete = async () => {
-    if (!user || !profile || taskComplete || todayCheckedIn === false) return;
-    setTaskComplete(true);
-    const newDay = profile.current_day + 1;
-    localStorage.setItem(`gm_task_done_${user.id}`, String(profile.current_day));
-    await supabase.from("profiles").update({ current_day: newDay }).eq("user_id", user.id);
-    refreshProfile();
+  const handleTaskComplete = () => {
+    // Task completion is tied to check-in; no separate day increment needed
+    // Day is calculated from calendar date, not stored/incremented
+    if (!taskComplete) setTaskComplete(true);
   };
 
   const handleLogout = async () => {
@@ -241,7 +247,7 @@ const Dashboard = () => {
                 <span className="text-xs text-muted-foreground font-medium">{daysLeft} days left</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium">Day {profile.current_day}</span>
+                <span className="text-xs text-muted-foreground font-medium">Day {calculatedDay}</span>
               </div>
             </div>
             <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
