@@ -23,6 +23,17 @@ const Dashboard = () => {
     }
   }, [loading, user, navigate]);
 
+  // Calculate current_day from signup date (calendar days since profile creation)
+  const calculatedDay = useMemo(() => {
+    if (!profile) return 1;
+    const created = new Date(profile.created_at);
+    const createdDate = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    const today = new Date();
+    const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffDays = Math.floor((todayDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, diffDays + 1); // Day 1 on signup day
+  }, [profile]);
+
   // Load check-in state from database (per-user, per-day)
   useEffect(() => {
     if (!user || !profile) return;
@@ -38,12 +49,12 @@ const Dashboard = () => {
         .gte("created_at", startOfDay)
         .lt("created_at", endOfDay);
       
-      if (count && count > 0) setTodayCheckedIn(true);
+      if (count && count > 0) {
+        setTodayCheckedIn(true);
+        setTaskComplete(true); // Task is done if checked in today
+      }
     };
     checkTodayCheckin();
-
-    const savedTaskDay = localStorage.getItem(`gm_task_done_${user.id}`);
-    if (savedTaskDay === String(profile.current_day)) setTaskComplete(true);
   }, [user, profile]);
 
   // Find or create match
