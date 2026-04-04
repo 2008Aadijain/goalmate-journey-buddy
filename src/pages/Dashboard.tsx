@@ -247,7 +247,7 @@ const Dashboard = () => {
                 <span className="text-xs text-muted-foreground font-medium">{daysLeft} days left</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium">Day {profile.current_day}</span>
+                <span className="text-xs text-muted-foreground font-medium">Day {calculatedDay}</span>
               </div>
             </div>
             <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
