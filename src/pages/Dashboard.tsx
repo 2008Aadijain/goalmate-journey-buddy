@@ -505,8 +505,25 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* ===== TODAY'S MOTIVATION ===== */}
+        {/* ===== SMART NUDGE ===== */}
         <div className={fadeClass(6)} style={{ transitionDelay: '450ms' }}>
+          <div className="rounded-2xl p-4 border border-secondary/20 relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, hsla(25, 80%, 50%, 0.08) 0%, hsla(258, 40%, 15%, 0.4) 100%)' }}
+          >
+            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-[40px] opacity-20"
+              style={{ background: 'hsl(25 100% 55%)' }} />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-base">💡</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-secondary/80">Daily Suggestion</span>
+              </div>
+              <p className="text-sm text-foreground font-semibold leading-relaxed">{todayNudge}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== TODAY'S MOTIVATION ===== */}
+        <div className={fadeClass(7)} style={{ transitionDelay: '500ms' }}>
           <div className="rounded-2xl p-4 border border-border/30" style={{ background: 'hsla(258, 20%, 10%, 0.4)' }}>
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-3.5 h-3.5 text-primary/70" />
