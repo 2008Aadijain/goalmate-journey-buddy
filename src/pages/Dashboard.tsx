@@ -18,6 +18,59 @@ const MOTIVATION_QUOTES = [
   "One day or day one — you decide. 🏆",
 ];
 
+const SMART_NUDGES: Record<string, string[]> = {
+  Learning: [
+    "Try 15 min of focused practice today ⏱️",
+    "Teach someone what you learned yesterday 🗣️",
+    "Review your notes from Day 1 — see how far you've come 📝",
+    "Watch one tutorial video during your break 🎬",
+    "Write down 3 things you learned this week ✍️",
+    "Try solving a problem without looking at the answer 🧩",
+    "Set a timer and do a 20-min deep work sprint 🏃",
+  ],
+  Fitness: [
+    "Drink 2 glasses of water before your first meal 💧",
+    "Take a 10-min walk after lunch today 🚶",
+    "Try holding a plank for 30 seconds right now 💪",
+    "Stretch for 5 minutes before bed tonight 🧘",
+    "Track what you eat today — awareness is key 📊",
+    "Do 10 pushups right now. Go! 🔥",
+    "Sleep 30 min earlier tonight for recovery 😴",
+  ],
+  Creative: [
+    "Spend 10 min browsing design inspiration today 🎨",
+    "Try recreating a UI you admire from scratch ✏️",
+    "Experiment with a new color palette 🌈",
+    "Share your latest work and ask for feedback 💬",
+    "Study one design principle deeply today 📐",
+    "Take a photo of something beautiful around you 📸",
+    "Sketch a quick wireframe on paper ✍️",
+  ],
+  Business: [
+    "Talk to one potential customer today 🗣️",
+    "Write down your top 3 priorities for the week 📋",
+    "Read one article about your industry 📰",
+    "Spend 15 min refining your pitch 🎤",
+    "Review your expenses — where can you optimize? 💰",
+    "Send one networking message today 🤝",
+    "Write down what your ideal customer looks like 🎯",
+  ],
+  Career: [
+    "Update one section of your resume today 📄",
+    "Apply to at least one job before end of day 🎯",
+    "Practice answering 'Tell me about yourself' 🗣️",
+    "Reach out to someone in your desired role on LinkedIn 🔗",
+    "Learn one new skill that's in-demand today 📚",
+    "Prepare a STAR story for your next interview ⭐",
+    "Set up a job alert for your dream role 🔔",
+  ],
+};
+
+const getSmartNudge = (category: string, day: number): string => {
+  const nudges = SMART_NUDGES[category] || SMART_NUDGES.Learning;
+  return nudges[(day - 1) % nudges.length];
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
