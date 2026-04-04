@@ -186,13 +186,10 @@ const Dashboard = () => {
     refreshProfile();
   };
 
-  const handleTaskComplete = async () => {
-    if (!user || !profile || taskComplete || todayCheckedIn === false) return;
-    setTaskComplete(true);
-    const newDay = profile.current_day + 1;
-    localStorage.setItem(`gm_task_done_${user.id}`, String(profile.current_day));
-    await supabase.from("profiles").update({ current_day: newDay }).eq("user_id", user.id);
-    refreshProfile();
+  const handleTaskComplete = () => {
+    // Task completion is tied to check-in; no separate day increment needed
+    // Day is calculated from calendar date, not stored/incremented
+    if (!taskComplete) setTaskComplete(true);
   };
 
   const handleLogout = async () => {
