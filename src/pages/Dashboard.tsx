@@ -18,6 +18,59 @@ const MOTIVATION_QUOTES = [
   "One day or day one — you decide. 🏆",
 ];
 
+const SMART_NUDGES: Record<string, string[]> = {
+  Learning: [
+    "Try 15 min of focused practice today ⏱️",
+    "Teach someone what you learned yesterday 🗣️",
+    "Review your notes from Day 1 — see how far you've come 📝",
+    "Watch one tutorial video during your break 🎬",
+    "Write down 3 things you learned this week ✍️",
+    "Try solving a problem without looking at the answer 🧩",
+    "Set a timer and do a 20-min deep work sprint 🏃",
+  ],
+  Fitness: [
+    "Drink 2 glasses of water before your first meal 💧",
+    "Take a 10-min walk after lunch today 🚶",
+    "Try holding a plank for 30 seconds right now 💪",
+    "Stretch for 5 minutes before bed tonight 🧘",
+    "Track what you eat today — awareness is key 📊",
+    "Do 10 pushups right now. Go! 🔥",
+    "Sleep 30 min earlier tonight for recovery 😴",
+  ],
+  Creative: [
+    "Spend 10 min browsing design inspiration today 🎨",
+    "Try recreating a UI you admire from scratch ✏️",
+    "Experiment with a new color palette 🌈",
+    "Share your latest work and ask for feedback 💬",
+    "Study one design principle deeply today 📐",
+    "Take a photo of something beautiful around you 📸",
+    "Sketch a quick wireframe on paper ✍️",
+  ],
+  Business: [
+    "Talk to one potential customer today 🗣️",
+    "Write down your top 3 priorities for the week 📋",
+    "Read one article about your industry 📰",
+    "Spend 15 min refining your pitch 🎤",
+    "Review your expenses — where can you optimize? 💰",
+    "Send one networking message today 🤝",
+    "Write down what your ideal customer looks like 🎯",
+  ],
+  Career: [
+    "Update one section of your resume today 📄",
+    "Apply to at least one job before end of day 🎯",
+    "Practice answering 'Tell me about yourself' 🗣️",
+    "Reach out to someone in your desired role on LinkedIn 🔗",
+    "Learn one new skill that's in-demand today 📚",
+    "Prepare a STAR story for your next interview ⭐",
+    "Set up a job alert for your dream role 🔔",
+  ],
+};
+
+const getSmartNudge = (category: string, day: number): string => {
+  const nudges = SMART_NUDGES[category] || SMART_NUDGES.Learning;
+  return nudges[(day - 1) % nudges.length];
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
@@ -140,6 +193,10 @@ const Dashboard = () => {
   }, [profile, calculatedDay]);
 
   const todayQuote = useMemo(() => MOTIVATION_QUOTES[new Date().getDate() % MOTIVATION_QUOTES.length], []);
+  const todayNudge = useMemo(() => {
+    if (!profile) return "";
+    return getSmartNudge(profile.goal_category, calculatedDay);
+  }, [profile, calculatedDay]);
 
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
@@ -448,8 +505,25 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* ===== TODAY'S MOTIVATION ===== */}
+        {/* ===== SMART NUDGE ===== */}
         <div className={fadeClass(6)} style={{ transitionDelay: '450ms' }}>
+          <div className="rounded-2xl p-4 border border-secondary/20 relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, hsla(25, 80%, 50%, 0.08) 0%, hsla(258, 40%, 15%, 0.4) 100%)' }}
+          >
+            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-[40px] opacity-20"
+              style={{ background: 'hsl(25 100% 55%)' }} />
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-base">💡</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-secondary/80">Daily Suggestion</span>
+              </div>
+              <p className="text-sm text-foreground font-semibold leading-relaxed">{todayNudge}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== TODAY'S MOTIVATION ===== */}
+        <div className={fadeClass(7)} style={{ transitionDelay: '500ms' }}>
           <div className="rounded-2xl p-4 border border-border/30" style={{ background: 'hsla(258, 20%, 10%, 0.4)' }}>
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-3.5 h-3.5 text-primary/70" />
