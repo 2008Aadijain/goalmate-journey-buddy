@@ -160,13 +160,12 @@ const Dashboard = () => {
 
   const todayTask = useMemo(() => {
     if (!profile) return null;
-    const currentDay = profile.current_day;
     if (profile.is_custom) {
-      return { day: currentDay, task: `Day ${currentDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
+      return { day: calculatedDay, task: `Day ${calculatedDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
     }
-    return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), currentDay) ||
-      getDayTask(profile.goal_category.toLowerCase(), currentDay);
-  }, [profile]);
+    return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), calculatedDay) ||
+      getDayTask(profile.goal_category.toLowerCase(), calculatedDay);
+  }, [profile, calculatedDay]);
 
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
