@@ -1,11 +1,22 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, LogOut, Globe, User, Trophy } from "lucide-react";
+import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, LogOut, Globe, User, Sparkles } from "lucide-react";
 import { getDayTask } from "@/data/roadmaps";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+
+const MOTIVATION_QUOTES = [
+  "Small steps every day lead to big results. 🚀",
+  "You didn't come this far to only come this far. 💪",
+  "Discipline is choosing what you want most over what you want now. 🎯",
+  "The secret of getting ahead is getting started. ⚡",
+  "Progress, not perfection. 🌟",
+  "Your future self will thank you. 🔥",
+  "Consistency beats intensity. Every single time. 💎",
+  "One day or day one — you decide. 🏆",
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -16,14 +27,14 @@ const Dashboard = () => {
   const [match, setMatch] = useState<Tables<"matches"> | null>(null);
   const [matchProfile, setMatchProfile] = useState<Tables<"profiles"> | null>(null);
   const [unreadDM, setUnreadDM] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/goal-setup");
-    }
+    if (!loading && !user) navigate("/goal-setup");
   }, [loading, user, navigate]);
 
-  // Calculate current_day from signup date (calendar days since profile creation)
   const calculatedDay = useMemo(() => {
     if (!profile) return 1;
     const created = new Date(profile.created_at);
@@ -31,46 +42,36 @@ const Dashboard = () => {
     const today = new Date();
     const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const diffDays = Math.floor((todayDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(1, diffDays + 1); // Day 1 on signup day
+    return Math.max(1, diffDays + 1);
   }, [profile]);
 
-  // Load check-in state from database (per-user, per-day)
   useEffect(() => {
     if (!user || !profile) return;
     const checkTodayCheckin = async () => {
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-      
       const { count } = await supabase
         .from("check_ins")
         .select("*", { count: "exact", head: true })
         .eq("user_id", user.id)
         .gte("created_at", startOfDay)
         .lt("created_at", endOfDay);
-      
       if (count && count > 0) {
         setTodayCheckedIn(true);
-        setTaskComplete(true); // Task is done if checked in today
+        setTaskComplete(true);
       }
     };
     checkTodayCheckin();
   }, [user, profile]);
 
-  // Find or create match
   useEffect(() => {
     if (!user || !profile) return;
-
     const findMatch = async () => {
-      // Check existing matches
       const { data: existing } = await supabase
-        .from("matches")
-        .select("*")
+        .from("matches").select("*")
         .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        .eq("status", "active")
-        .limit(1)
-        .single();
-
+        .eq("status", "active").limit(1).single();
       if (existing) {
         setMatch(existing);
         const partnerId = existing.user1_id === user.id ? existing.user2_id : existing.user1_id;
@@ -78,273 +79,278 @@ const Dashboard = () => {
         if (partner) setMatchProfile(partner);
         return;
       }
-
-      // Find unmatched user with same category
       const { data: candidates } = await supabase
-        .from("profiles")
-        .select("*")
+        .from("profiles").select("*")
         .eq("goal_category", profile.goal_category)
-        .neq("user_id", user.id)
-        .limit(10);
-
+        .neq("user_id", user.id).limit(10);
       if (!candidates || candidates.length === 0) return;
-
-      // Check which candidates are already matched
       for (const candidate of candidates) {
         const { data: existingMatch } = await supabase
-          .from("matches")
-          .select("id")
+          .from("matches").select("id")
           .or(`user1_id.eq.${candidate.user_id},user2_id.eq.${candidate.user_id}`)
-          .eq("status", "active")
-          .limit(1)
-          .maybeSingle();
-
+          .eq("status", "active").limit(1).maybeSingle();
         if (!existingMatch) {
-          // Create match
           const { data: newMatch } = await supabase
             .from("matches")
             .insert({ user1_id: user.id, user2_id: candidate.user_id, goal_category: profile.goal_category })
-            .select()
-            .single();
-          if (newMatch) {
-            setMatch(newMatch);
-            setMatchProfile(candidate);
-          }
+            .select().single();
+          if (newMatch) { setMatch(newMatch); setMatchProfile(candidate); }
           return;
         }
       }
     };
-
     findMatch();
   }, [user, profile]);
 
-  // Count unread DMs
   useEffect(() => {
     if (!match || !user) return;
     const countUnread = async () => {
       const { count } = await supabase
-        .from("direct_messages")
-        .select("*", { count: "exact", head: true })
-        .eq("match_id", match.id)
-        .neq("sender_id", user.id)
-        .eq("read", false);
+        .from("direct_messages").select("*", { count: "exact", head: true })
+        .eq("match_id", match.id).neq("sender_id", user.id).eq("read", false);
       setUnreadDM(count || 0);
     };
     countUnread();
-
     const channel = supabase
       .channel(`unread-${match.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages", filter: `match_id=eq.${match.id}` }, () => {
-        countUnread();
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages", filter: `match_id=eq.${match.id}` }, () => countUnread())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [match, user]);
 
   const daysLeft = useMemo(() => {
     if (!profile?.deadline) return 30;
-    const diff = new Date(profile.deadline).getTime() - Date.now();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil((new Date(profile.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
   }, [profile]);
 
   const totalDays = useMemo(() => {
     if (!profile?.deadline) return 30;
     const created = new Date(profile.created_at);
     const createdDate = new Date(created.getFullYear(), created.getMonth(), created.getDate());
-    const diff = new Date(profile.deadline).getTime() - createdDate.getTime();
-    return Math.max(30, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    return Math.max(30, Math.ceil((new Date(profile.deadline).getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24)));
   }, [profile]);
 
   const progress = Math.min(100, Math.round(((totalDays - daysLeft) / totalDays) * 100));
 
   const todayTask = useMemo(() => {
     if (!profile) return null;
-    if (profile.is_custom) {
-      return { day: calculatedDay, task: `Day ${calculatedDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
-    }
+    if (profile.is_custom) return { day: calculatedDay, task: `Day ${calculatedDay}: Work on your goal`, detail: "Add your tasks manually and track daily progress." };
     return getDayTask(profile.goal_label.toLowerCase().replace(/\s+/g, '-'), calculatedDay) ||
       getDayTask(profile.goal_category.toLowerCase(), calculatedDay);
   }, [profile, calculatedDay]);
+
+  const todayQuote = useMemo(() => MOTIVATION_QUOTES[new Date().getDate() % MOTIVATION_QUOTES.length], []);
 
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
     const newStreak = profile.streak + 1;
     setTodayCheckedIn(true);
-    // Post to progress wall
     await supabase.from("check_ins").insert({
-      user_id: user.id,
-      user_name: profile.name,
-      goal_category: profile.goal_category,
-      goal_label: profile.goal_label,
-      goal_emoji: profile.goal_emoji,
-      content: checkinText,
-      streak_at_time: newStreak,
+      user_id: user.id, user_name: profile.name, goal_category: profile.goal_category,
+      goal_label: profile.goal_label, goal_emoji: profile.goal_emoji,
+      content: checkinText, streak_at_time: newStreak,
     });
     setCheckinText("");
     await supabase.from("profiles").update({ streak: newStreak }).eq("user_id", user.id);
     refreshProfile();
   };
 
-  const handleTaskComplete = () => {
-    // Task completion is tied to check-in; no separate day increment needed
-    // Day is calculated from calendar date, not stored/incremented
-    if (!taskComplete) setTaskComplete(true);
-  };
+  const handleTaskComplete = () => { if (!taskComplete) setTaskComplete(true); };
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
-  };
+  const handleLogout = async () => { await signOut(); navigate("/"); };
 
   if (loading || !profile) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">
-        <div className="text-4xl mb-3 animate-pulse">🎯</div>
-        <p className="text-muted-foreground text-sm">Loading...</p>
+        <div className="text-5xl mb-4 animate-pulse">🎯</div>
+        <p className="text-muted-foreground text-sm">Loading your journey...</p>
       </div>
     </div>
   );
 
+  const fadeClass = (delay: number) => cn(
+    "transition-all duration-700",
+    mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6",
+  );
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Ambient glow */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full opacity-[0.12] blur-[120px]"
+          style={{ background: 'hsl(258 100% 55%)' }} />
+      </div>
+
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background">
-        <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
-          <h1 className="text-xl font-black text-gradient-hero">GoalMate</h1>
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-5 py-3.5 max-w-lg mx-auto">
+          <h1 className="text-xl font-black text-gradient-hero tracking-tight">GoalMate</h1>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground font-medium">Hi, {profile.name.split(" ")[0]}</span>
-            <button onClick={handleLogout} className="p-2 rounded-full glass-card">
+            <button onClick={handleLogout} className="p-2 rounded-full border border-border/50 hover:bg-muted/50 transition-colors">
               <LogOut className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="px-4 py-6 max-w-lg mx-auto space-y-4">
-        {/* My Goal Card */}
-        <div className="rounded-2xl p-5 relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, hsla(258, 100%, 40%, 0.4) 0%, hsla(258, 60%, 20%, 0.6) 100%)',
-            border: '1px solid hsla(258, 100%, 62%, 0.2)',
-          }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-20 blur-[60px]"
-            style={{ background: 'hsla(258, 100%, 62%, 0.8)' }}
-          />
-          <div className="relative z-10">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-primary">My Goal</span>
-              </div>
-              <span className="text-2xl">{profile.goal_emoji}</span>
-            </div>
-            <h3 className="text-lg font-bold text-foreground mb-3">{profile.goal_label}</h3>
-            <div className="flex items-center gap-4 mb-3">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground font-medium">{daysLeft} days left</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground font-medium">Day {calculatedDay}</span>
+      <main className="relative z-10 px-5 pt-6 pb-6 max-w-lg mx-auto space-y-5">
+
+        {/* ===== STREAK HERO ===== */}
+        <div className={fadeClass(0)} style={{ transitionDelay: '0ms' }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Your streak</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black text-foreground leading-none">{profile.streak}</span>
+                <span className="text-lg text-muted-foreground font-semibold">days</span>
               </div>
             </div>
-            <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${progress}%`,
-                  background: 'linear-gradient(90deg, hsl(258 100% 62%), hsl(280 100% 60%))',
-                  boxShadow: '0 0 12px hsla(258, 100%, 62%, 0.5)',
-                }}
-              />
+            <div className="relative">
+              <div className="text-5xl animate-[breathe_3s_ease-in-out_infinite]">🔥</div>
+              <div className="absolute inset-0 rounded-full blur-xl opacity-40"
+                style={{ background: 'hsla(25, 100%, 55%, 0.6)' }} />
             </div>
-            <p className="text-xs text-muted-foreground mt-1.5">{progress}% complete</p>
           </div>
         </div>
 
-        {/* Daily Check-in */}
-        <div className="glass-card-glow p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+        {/* ===== MY GOAL CARD (dominant) ===== */}
+        <div className={fadeClass(1)} style={{ transitionDelay: '100ms' }}>
+          <div className="rounded-2xl p-6 relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(145deg, hsla(258, 100%, 50%, 0.35) 0%, hsla(280, 80%, 35%, 0.25) 50%, hsla(258, 60%, 18%, 0.5) 100%)',
+              border: '1px solid hsla(258, 100%, 70%, 0.2)',
+              boxShadow: '0 0 60px -15px hsla(258, 100%, 62%, 0.3), inset 0 1px 0 hsla(0, 0%, 100%, 0.06)',
+            }}
+          >
+            {/* Glow orbs */}
+            <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-[80px] opacity-30"
+              style={{ background: 'hsl(258 100% 62%)' }} />
+            <div className="absolute -bottom-10 -left-10 w-32 h-32 rounded-full blur-[60px] opacity-15"
+              style={{ background: 'hsl(280 100% 60%)' }} />
+
+            <div className="relative z-10">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-4 h-4 text-primary" />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/80">My Goal</span>
+                  </div>
+                  <h2 className="text-2xl font-black text-foreground leading-tight">{profile.goal_label}</h2>
+                </div>
+                <span className="text-3xl">{profile.goal_emoji}</span>
+              </div>
+
+              <div className="flex items-center gap-5 mb-4">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-primary/60" />
+                  <span className="text-xs text-foreground/70 font-medium">Day {calculatedDay}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-foreground/70 font-medium">{daysLeft} days left</span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'hsla(258, 40%, 30%, 0.5)' }}>
+                <div className="h-full rounded-full transition-all duration-700 ease-out"
+                  style={{
+                    width: `${progress}%`,
+                    background: 'linear-gradient(90deg, hsl(258 100% 65%), hsl(280 100% 65%), hsl(258 100% 70%))',
+                    boxShadow: '0 0 16px hsla(258, 100%, 62%, 0.6)',
+                  }}
+                />
+              </div>
+              <p className="text-[11px] text-foreground/50 mt-2 font-medium">{progress}% complete</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ===== DAILY CHECK-IN ===== */}
+        <div className={fadeClass(2)} style={{ transitionDelay: '200ms' }}>
+          <div className="rounded-2xl p-5 border border-border/40" style={{ background: 'hsla(258, 30%, 12%, 0.5)' }}>
+            <div className="flex items-center gap-2 mb-4">
               <Flame className="w-4 h-4 text-secondary" />
               <span className="text-sm font-bold text-foreground">Daily Check-in</span>
             </div>
-            <div className="flex items-center gap-1 px-3 py-1 rounded-full"
-              style={{ background: 'hsla(0, 100%, 71%, 0.15)' }}
-            >
-              <Flame className="w-3.5 h-3.5 text-secondary" />
-              <span className="text-sm font-bold text-secondary">{profile.streak}</span>
-            </div>
-          </div>
 
-          {todayCheckedIn ? (
-            <div className="text-center py-4">
-              <div className="text-4xl mb-2">🔥</div>
-              <p className="text-foreground font-semibold">You're on fire!</p>
-              <p className="text-muted-foreground text-xs mt-1">{profile.streak} day streak — keep it going!</p>
-            </div>
-          ) : (
-            <>
-              <textarea
-                value={checkinText}
-                onChange={(e) => setCheckinText(e.target.value)}
-                placeholder="What did you do today for your goal?"
-                className="w-full h-20 bg-transparent border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none transition-all mb-3"
-              />
-              <button
-                onClick={handleCheckin}
-                disabled={!checkinText.trim()}
-                className="w-full glow-button text-primary-foreground py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                Check In ✅
-              </button>
-            </>
-          )}
+            {todayCheckedIn ? (
+              <div className="text-center py-5">
+                <div className="text-5xl mb-3 animate-[breathe_3s_ease-in-out_infinite]">✅</div>
+                <p className="text-foreground font-bold text-lg">Already checked in!</p>
+                <p className="text-muted-foreground text-xs mt-1.5">See you tomorrow — keep the streak alive 🔥</p>
+              </div>
+            ) : (
+              <>
+                <textarea
+                  value={checkinText}
+                  onChange={(e) => setCheckinText(e.target.value)}
+                  placeholder="What did you do today for your goal?"
+                  className="w-full h-20 bg-transparent border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/30 resize-none transition-all"
+                />
+                <button
+                  onClick={handleCheckin}
+                  disabled={!checkinText.trim()}
+                  className="mt-3 w-full py-3.5 rounded-full text-sm font-bold text-primary-foreground transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97]"
+                  style={{
+                    background: checkinText.trim()
+                      ? 'linear-gradient(135deg, hsl(258 100% 62%), hsl(280 100% 58%))'
+                      : 'hsla(258, 30%, 30%, 0.5)',
+                    boxShadow: checkinText.trim()
+                      ? '0 0 30px hsla(258, 100%, 62%, 0.4), inset 0 1px 0 hsla(0, 0%, 100%, 0.15)'
+                      : 'none',
+                  }}
+                >
+                  Check In ✅
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* GoalMate Card */}
-        <div className="rounded-2xl p-5 relative overflow-hidden"
-          style={{
-            background: 'linear-gradient(135deg, hsla(0, 100%, 50%, 0.12) 0%, hsla(20, 100%, 50%, 0.08) 100%)',
-            border: '1px solid hsla(0, 100%, 71%, 0.15)',
-          }}
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-15 blur-[60px]"
-            style={{ background: 'hsla(0, 100%, 71%, 0.8)' }}
-          />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-secondary" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-secondary">Your GoalMate</span>
+        {/* ===== GOALMATE CARD (purple theme, not red) ===== */}
+        <div className={fadeClass(3)} style={{ transitionDelay: '300ms' }}>
+          <div className="rounded-2xl p-5 border border-border/40" style={{ background: 'hsla(270, 30%, 12%, 0.5)' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">Your GoalMate</span>
             </div>
 
             {matchProfile ? (
               <div>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-                    style={{ background: 'hsla(0, 100%, 71%, 0.2)' }}
-                  >
-                    {matchProfile.goal_emoji}
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                      style={{ background: 'hsla(258, 80%, 50%, 0.2)', border: '2px solid hsla(258, 100%, 62%, 0.3)' }}
+                    >
+                      {matchProfile.goal_emoji}
+                    </div>
+                    {/* Online indicator */}
+                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background"
+                      style={{ background: 'hsl(145 80% 50%)' }} />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-foreground font-semibold text-sm">{matchProfile.name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground font-bold text-sm">{matchProfile.name}</p>
                     <p className="text-muted-foreground text-xs mt-0.5">{matchProfile.goal_label}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Flame className="w-3 h-3 text-secondary" />
-                      <span className="text-xs text-secondary font-semibold">{matchProfile.streak} day streak</span>
+                      <span className="text-xs text-secondary font-bold">{matchProfile.streak} day streak</span>
                     </div>
                   </div>
                 </div>
+                <p className="text-[11px] text-muted-foreground mt-3">Motivate each other 💪</p>
                 <button
                   onClick={() => navigate(`/chat/${match?.id}`)}
-                  className="mt-4 w-full glass-card flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-foreground hover:bg-primary/10 transition-all"
+                  className="mt-3 w-full py-2.5 rounded-full text-sm font-bold text-foreground transition-all duration-300 active:scale-[0.97] flex items-center justify-center gap-2"
+                  style={{
+                    background: 'hsla(258, 60%, 40%, 0.25)',
+                    border: '1px solid hsla(258, 100%, 62%, 0.2)',
+                  }}
                 >
-                  <MessageCircle className="w-4 h-4" />
+                  <MessageCircle className="w-4 h-4 text-primary" />
                   Chat with {matchProfile.name.split(" ")[0]}
                   {unreadDM > 0 && (
-                    <span className="ml-1 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-xs font-bold flex items-center justify-center">
+                    <span className="ml-1 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
                       {unreadDM}
                     </span>
                   )}
@@ -353,114 +359,125 @@ const Dashboard = () => {
             ) : (
               <div>
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
                     <Users className="w-5 h-5 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-foreground font-semibold text-sm">Finding your GoalMate...</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">We're matching you with someone on the same mission</p>
+                    <p className="text-foreground font-bold text-sm">Finding your GoalMate...</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">Matching you with someone on the same mission</p>
                   </div>
                 </div>
-                <div className="mt-4 h-1 rounded-full bg-muted/50 overflow-hidden">
-                  <div className="h-full rounded-full bg-secondary/60 animate-pulse" style={{ width: '65%' }} />
+                <div className="mt-4 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsla(258, 30%, 25%, 0.5)' }}>
+                  <div className="h-full rounded-full animate-pulse" style={{ width: '65%', background: 'linear-gradient(90deg, hsl(258 100% 62%), hsl(280 100% 60%))' }} />
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Group Chat Card */}
-        <button
-          onClick={() => navigate("/group-chat")}
-          className="w-full glass-card-glow p-5 text-left"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ background: 'hsla(258, 100%, 62%, 0.2)' }}
-              >
-                <Users className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-foreground font-semibold text-sm">{profile.goal_category} Group Chat</p>
-                <p className="text-muted-foreground text-xs">Connect with everyone chasing the same goal</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
-        </button>
-
-        {/* Today's Roadmap Task */}
-        {todayTask && (
-          <div className="glass-card-glow p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold"
-                  style={{ background: 'hsla(258, 100%, 62%, 0.2)' }}
+        {/* ===== GROUP CHAT ===== */}
+        <div className={fadeClass(4)} style={{ transitionDelay: '350ms' }}>
+          <button
+            onClick={() => navigate("/group-chat")}
+            className="w-full rounded-2xl p-4 text-left border border-border/40 transition-all duration-300 active:scale-[0.98]"
+            style={{ background: 'hsla(258, 30%, 12%, 0.5)' }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: 'hsla(258, 80%, 50%, 0.15)' }}
                 >
-                  📋
+                  <Users className="w-5 h-5 text-primary" />
                 </div>
-                <span className="text-sm font-bold text-foreground">Today's Task</span>
+                <div>
+                  <p className="text-foreground font-bold text-sm">{profile.goal_category} Group</p>
+                  <p className="text-muted-foreground text-[11px]">Chat with others chasing the same goal</p>
+                </div>
               </div>
-              <span className="text-xs text-muted-foreground font-medium">Day {todayTask.day}</span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </div>
+          </button>
+        </div>
 
-            <div className="flex items-start gap-3">
-              <button
-                onClick={handleTaskComplete}
-                disabled={taskComplete}
-                className={cn(
-                  "mt-0.5 w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center transition-all duration-300",
-                  taskComplete
-                    ? "bg-primary border-primary text-primary-foreground"
-                    : "border-border hover:border-primary"
-                )}
-              >
-                {taskComplete && <Check className="w-3.5 h-3.5" />}
-              </button>
-              <div className="flex-1 min-w-0">
-                <p className={cn(
-                  "text-sm font-semibold transition-all",
-                  taskComplete ? "text-muted-foreground line-through" : "text-foreground"
-                )}>
-                  {todayTask.task}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  {todayTask.detail}
-                </p>
+        {/* ===== TODAY'S TASK ===== */}
+        {todayTask && (
+          <div className={fadeClass(5)} style={{ transitionDelay: '400ms' }}>
+            <div className="rounded-2xl p-5 border border-border/40" style={{ background: 'hsla(258, 30%, 12%, 0.5)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📋</span>
+                  <span className="text-sm font-bold text-foreground">Today's Task</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70 px-2.5 py-1 rounded-full"
+                  style={{ background: 'hsla(258, 80%, 50%, 0.12)' }}
+                >
+                  Day {todayTask.day}
+                </span>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+
+              <div className="flex items-start gap-3">
+                <button
+                  onClick={handleTaskComplete}
+                  disabled={taskComplete}
+                  className={cn(
+                    "mt-0.5 w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center transition-all duration-300",
+                    taskComplete
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border/60 hover:border-primary/60"
+                  )}
+                >
+                  {taskComplete && <Check className="w-3.5 h-3.5" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={cn(
+                    "text-sm font-semibold transition-all",
+                    taskComplete ? "text-muted-foreground line-through" : "text-foreground"
+                  )}>
+                    {todayTask.task}
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1.5 leading-relaxed">{todayTask.detail}</p>
+                </div>
+              </div>
+
+              {taskComplete && (
+                <div className="mt-4 text-center py-2.5 rounded-xl" style={{ background: 'hsla(258, 80%, 50%, 0.1)' }}>
+                  <p className="text-xs text-primary font-bold">✨ Great job! See you tomorrow.</p>
+                </div>
+              )}
             </div>
-
-            {taskComplete && (
-              <div className="mt-4 text-center py-2 rounded-xl" style={{ background: 'hsla(258, 100%, 62%, 0.1)' }}>
-                <p className="text-xs text-primary font-semibold">✨ Great job! See you tomorrow.</p>
-              </div>
-            )}
           </div>
         )}
-        {/* Bottom Nav */}
-        <div className="h-20" />
+
+        {/* ===== TODAY'S MOTIVATION ===== */}
+        <div className={fadeClass(6)} style={{ transitionDelay: '450ms' }}>
+          <div className="rounded-2xl p-4 border border-border/30" style={{ background: 'hsla(258, 20%, 10%, 0.4)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-primary/70" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Today's Motivation</span>
+            </div>
+            <p className="text-sm text-foreground/80 font-medium italic leading-relaxed">"{todayQuote}"</p>
+          </div>
+        </div>
+
+        <div className="h-24" />
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background">
-        <div className="flex items-center justify-around max-w-lg mx-auto py-2">
-          <button onClick={() => navigate("/dashboard")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
-            <Target className="w-5 h-5 text-primary" />
-            <span className="text-[10px] font-semibold text-primary">Home</span>
-          </button>
-          <button onClick={() => navigate("/progress-wall")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
-            <Globe className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground">Wall</span>
-          </button>
-          <button onClick={() => navigate("/group-chat")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
-            <Users className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground">Group</span>
-          </button>
-          <button onClick={() => navigate("/profile")} className="flex flex-col items-center gap-0.5 px-3 py-1.5">
-            <User className="w-5 h-5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground">Profile</span>
-          </button>
+      {/* Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/30 bg-background/95 backdrop-blur-sm">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-2.5">
+          {[
+            { icon: Target, label: "Home", path: "/dashboard", active: true },
+            { icon: Globe, label: "Wall", path: "/progress-wall", active: false },
+            { icon: Users, label: "Group", path: "/group-chat", active: false },
+            { icon: User, label: "Profile", path: "/profile", active: false },
+          ].map((item) => (
+            <button key={item.label} onClick={() => navigate(item.path)}
+              className="flex flex-col items-center gap-0.5 px-4 py-1.5 transition-colors"
+            >
+              <item.icon className={cn("w-5 h-5", item.active ? "text-primary" : "text-muted-foreground/60")} />
+              <span className={cn("text-[10px] font-bold", item.active ? "text-primary" : "text-muted-foreground/60")}>{item.label}</span>
+            </button>
+          ))}
         </div>
       </nav>
     </div>
