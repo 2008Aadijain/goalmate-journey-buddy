@@ -22,15 +22,21 @@ interface Reaction {
   user_id: string;
 }
 
-const CATEGORIES = ["All", "Fitness", "Career", "Education", "Business", "Personal Growth"];
+interface UserAvatar {
+  user_id: string;
+  avatar_url: string | null;
+}
+
+const CATEGORIES = ["All", "Fitness", "Career", "Learning", "Business", "Creative"];
 
 const ProgressWall = () => {
   const navigate = useNavigate();
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [filter, setFilter] = useState("All");
   const [showFilter, setShowFilter] = useState(false);
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     if (!loading && !user) navigate("/goal-setup");
@@ -40,7 +46,22 @@ const ProgressWall = () => {
     let query = supabase.from("check_ins").select("*").order("created_at", { ascending: false }).limit(50);
     if (filter !== "All") query = query.eq("goal_category", filter);
     const { data } = await query;
-    if (data) setCheckIns(data);
+    if (data) {
+      setCheckIns(data);
+      // Fetch avatars for unique user IDs
+      const userIds = [...new Set(data.map(d => d.user_id))];
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, avatar_url")
+          .in("user_id", userIds);
+        if (profiles) {
+          const map: Record<string, string | null> = {};
+          profiles.forEach(p => { map[p.user_id] = p.avatar_url; });
+          setAvatars(map);
+        }
+      }
+    }
 
     const { data: rxns } = await supabase.from("check_in_reactions").select("check_in_id, reaction_type, user_id");
     if (rxns) setReactions(rxns);
@@ -49,12 +70,10 @@ const ProgressWall = () => {
   useEffect(() => {
     if (!user) return;
     fetchData();
-
     const channel = supabase
       .channel("progress-wall")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "check_ins" }, () => fetchData())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [user, filter]);
 
@@ -67,14 +86,10 @@ const ProgressWall = () => {
   const toggleReaction = async (checkInId: string, type: string) => {
     if (!user) return;
     if (hasReacted(checkInId, type)) {
-      await supabase.from("check_in_reactions")
-        .delete()
-        .eq("check_in_id", checkInId)
-        .eq("user_id", user.id)
-        .eq("reaction_type", type);
+      await supabase.from("check_in_reactions").delete()
+        .eq("check_in_id", checkInId).eq("user_id", user.id).eq("reaction_type", type);
     } else {
-      await supabase.from("check_in_reactions")
-        .insert({ check_in_id: checkInId, user_id: user.id, reaction_type: type });
+      await supabase.from("check_in_reactions").insert({ check_in_id: checkInId, user_id: user.id, reaction_type: type });
     }
     fetchData();
   };
@@ -113,15 +128,11 @@ const ProgressWall = () => {
           <div className="px-4 pb-3 max-w-lg mx-auto">
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map(cat => (
-                <button
-                  key={cat}
+                <button key={cat}
                   onClick={() => { setFilter(cat); setShowFilter(false); }}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    filter === cat
-                      ? "bg-primary text-primary-foreground"
-                      : "glass-card text-muted-foreground hover:text-foreground"
-                  }`}
-                >
+                    filter === cat ? "bg-primary text-primary-foreground" : "glass-card text-muted-foreground hover:text-foreground"
+                  }`}>
                   {cat}
                 </button>
               ))}
@@ -141,11 +152,14 @@ const ProgressWall = () => {
           checkIns.map((ci) => (
             <div key={ci.id} className="glass-card-glow p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-                  style={{ background: 'hsla(258, 100%, 62%, 0.2)' }}
-                >
-                  {ci.goal_emoji}
-                </div>
+                {avatars[ci.user_id] ? (
+                  <img src={avatars[ci.user_id]!} alt="" className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                    style={{ background: 'hsla(258, 100%, 62%, 0.2)' }}>
+                    {ci.goal_emoji}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground">{ci.user_name}</p>
                   <p className="text-xs text-muted-foreground">{ci.goal_label} · {timeAgo(ci.created_at)}</p>
@@ -157,25 +171,17 @@ const ProgressWall = () => {
               </div>
               <p className="text-sm text-foreground/90 leading-relaxed mb-3">{ci.content}</p>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => toggleReaction(ci.id, "like")}
+                <button onClick={() => toggleReaction(ci.id, "like")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    hasReacted(ci.id, "like")
-                      ? "bg-secondary/20 text-secondary"
-                      : "glass-card text-muted-foreground hover:text-secondary"
-                  }`}
-                >
+                    hasReacted(ci.id, "like") ? "bg-secondary/20 text-secondary" : "glass-card text-muted-foreground hover:text-secondary"
+                  }`}>
                   <Heart className={`w-3.5 h-3.5 ${hasReacted(ci.id, "like") ? "fill-current" : ""}`} />
                   {getReactionCount(ci.id, "like") || "Like"}
                 </button>
-                <button
-                  onClick={() => toggleReaction(ci.id, "metoo")}
+                <button onClick={() => toggleReaction(ci.id, "metoo")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    hasReacted(ci.id, "metoo")
-                      ? "bg-primary/20 text-primary"
-                      : "glass-card text-muted-foreground hover:text-primary"
-                  }`}
-                >
+                    hasReacted(ci.id, "metoo") ? "bg-primary/20 text-primary" : "glass-card text-muted-foreground hover:text-primary"
+                  }`}>
                   <HandMetal className="w-3.5 h-3.5" />
                   {getReactionCount(ci.id, "metoo") || "Me Too!"}
                 </button>
