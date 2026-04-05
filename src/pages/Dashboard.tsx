@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, LogOut, Globe, User, Sparkles } from "lucide-react";
+import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, Globe, User, Sparkles, MoreVertical, Trophy, Zap } from "lucide-react";
 import { getDayTask } from "@/data/roadmaps";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import ProgressGraph from "@/components/ProgressGraph";
+import SettingsPanel from "@/components/SettingsPanel";
 
 const MOTIVATION_QUOTES = [
   "Small steps every day lead to big results. 🚀",
@@ -81,12 +83,38 @@ const Dashboard = () => {
   const [matchProfile, setMatchProfile] = useState<Tables<"profiles"> | null>(null);
   const [unreadDM, setUnreadDM] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [checkInDates, setCheckInDates] = useState<string[]>([]);
+  const [pendingFriendCount, setPendingFriendCount] = useState(0);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!loading && !user) navigate("/goal-setup");
   }, [loading, user, navigate]);
+
+  // Request notification permission on first load
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // 8 PM reminder check
+  useEffect(() => {
+    if (!user || !profile || todayCheckedIn) return;
+    const checkReminder = () => {
+      const now = new Date();
+      if (now.getHours() >= 20 && "Notification" in window && Notification.permission === "granted") {
+        new Notification("GoalMate 🔥", {
+          body: "Hey! Don't break your streak today 🔥 Check in now!",
+          icon: "/placeholder.svg",
+        });
+      }
+    };
+    const interval = setInterval(checkReminder, 60000 * 30); // check every 30 min
+    return () => clearInterval(interval);
+  }, [user, profile, todayCheckedIn]);
 
   const calculatedDay = useMemo(() => {
     if (!profile) return 1;
@@ -98,9 +126,20 @@ const Dashboard = () => {
     return Math.max(1, diffDays + 1);
   }, [profile]);
 
+  // Load check-in dates for graph + today check
   useEffect(() => {
     if (!user || !profile) return;
-    const checkTodayCheckin = async () => {
+    const loadCheckins = async () => {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const { data } = await supabase
+        .from("check_ins")
+        .select("created_at")
+        .eq("user_id", user.id)
+        .gte("created_at", sevenDaysAgo.toISOString());
+      if (data) setCheckInDates(data.map(d => d.created_at));
+
+      // Check today
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
@@ -115,8 +154,22 @@ const Dashboard = () => {
         setTaskComplete(true);
       }
     };
-    checkTodayCheckin();
+    loadCheckins();
   }, [user, profile]);
+
+  // Pending friend requests count
+  useEffect(() => {
+    if (!user) return;
+    const loadPending = async () => {
+      const { count } = await supabase
+        .from("friend_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("receiver_id", user.id)
+        .eq("status", "pending");
+      setPendingFriendCount(count || 0);
+    };
+    loadPending();
+  }, [user]);
 
   useEffect(() => {
     if (!user || !profile) return;
@@ -201,6 +254,7 @@ const Dashboard = () => {
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
     const newStreak = profile.streak + 1;
+    const xpGain = 10 + (newStreak % 7 === 0 ? 50 : 0) + (newStreak === 30 ? 200 : 0);
     setTodayCheckedIn(true);
     await supabase.from("check_ins").insert({
       user_id: user.id, user_name: profile.name, goal_category: profile.goal_category,
@@ -208,7 +262,10 @@ const Dashboard = () => {
       content: checkinText, streak_at_time: newStreak,
     });
     setCheckinText("");
-    await supabase.from("profiles").update({ streak: newStreak }).eq("user_id", user.id);
+    await supabase.from("profiles").update({
+      streak: newStreak,
+      xp: (profile.xp ?? 0) + xpGain,
+    }).eq("user_id", user.id);
     refreshProfile();
   };
 
@@ -232,6 +289,8 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background relative">
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} onLogout={handleLogout} />
+
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full opacity-[0.12] blur-[120px]"
@@ -242,10 +301,29 @@ const Dashboard = () => {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur-sm">
         <div className="flex items-center justify-between px-5 py-3.5 max-w-lg mx-auto">
           <h1 className="text-xl font-black text-gradient-hero tracking-tight">GoalMate</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground font-medium">Hi, {profile.name.split(" ")[0]}</span>
-            <button onClick={handleLogout} className="p-2 rounded-full border border-border/50 hover:bg-muted/50 transition-colors">
-              <LogOut className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-2">
+            {/* XP Badge */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full"
+              style={{ background: 'hsla(258, 80%, 50%, 0.15)', border: '1px solid hsla(258, 100%, 62%, 0.2)' }}>
+              <Zap className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs font-black text-primary">{profile.xp ?? 0}</span>
+            </div>
+
+            {/* Avatar */}
+            <button onClick={() => navigate("/profile")} className="relative">
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-border/40" />
+              ) : (
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 border-border/40"
+                  style={{ background: 'hsla(258, 80%, 50%, 0.2)' }}>
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </button>
+
+            {/* Settings */}
+            <button onClick={() => setSettingsOpen(true)} className="p-2 rounded-full hover:bg-muted/50 transition-colors">
+              <MoreVertical className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
         </div>
@@ -271,7 +349,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ===== MY GOAL CARD (dominant) ===== */}
+        {/* ===== MY GOAL CARD ===== */}
         <div className={fadeClass(1)} style={{ transitionDelay: '100ms' }}>
           <div className="rounded-2xl p-6 relative overflow-hidden"
             style={{
@@ -280,7 +358,6 @@ const Dashboard = () => {
               boxShadow: '0 0 60px -15px hsla(258, 100%, 62%, 0.3), inset 0 1px 0 hsla(0, 0%, 100%, 0.06)',
             }}
           >
-            {/* Glow orbs */}
             <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full blur-[80px] opacity-30"
               style={{ background: 'hsl(258 100% 62%)' }} />
             <div className="absolute -bottom-10 -left-10 w-32 h-32 rounded-full blur-[60px] opacity-15"
@@ -303,12 +380,9 @@ const Dashboard = () => {
                   <Calendar className="w-3.5 h-3.5 text-primary/60" />
                   <span className="text-xs text-foreground/70 font-medium">Day {calculatedDay}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-foreground/70 font-medium">{daysLeft} days left</span>
-                </div>
+                <span className="text-xs text-foreground/70 font-medium">{daysLeft} days left</span>
               </div>
 
-              {/* Progress bar */}
               <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'hsla(258, 40%, 30%, 0.5)' }}>
                 <div className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
@@ -358,15 +432,20 @@ const Dashboard = () => {
                       : 'none',
                   }}
                 >
-                  Check In ✅
+                  Check In ✅ (+10 XP)
                 </button>
               </>
             )}
           </div>
         </div>
 
-        {/* ===== GOALMATE CARD (purple theme, not red) ===== */}
-        <div className={fadeClass(3)} style={{ transitionDelay: '300ms' }}>
+        {/* ===== PROGRESS GRAPH ===== */}
+        <div className={fadeClass(3)} style={{ transitionDelay: '250ms' }}>
+          <ProgressGraph checkInDates={checkInDates} />
+        </div>
+
+        {/* ===== GOALMATE CARD ===== */}
+        <div className={fadeClass(4)} style={{ transitionDelay: '300ms' }}>
           <div className="rounded-2xl p-5 border border-border/40" style={{ background: 'hsla(270, 30%, 12%, 0.5)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-4 h-4 text-primary" />
@@ -377,12 +456,15 @@ const Dashboard = () => {
               <div>
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-                      style={{ background: 'hsla(258, 80%, 50%, 0.2)', border: '2px solid hsla(258, 100%, 62%, 0.3)' }}
-                    >
-                      {matchProfile.goal_emoji}
-                    </div>
-                    {/* Online indicator */}
+                    {matchProfile.avatar_url ? (
+                      <img src={matchProfile.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover"
+                        style={{ border: '2px solid hsla(258, 100%, 62%, 0.3)' }} />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                        style={{ background: 'hsla(258, 80%, 50%, 0.2)', border: '2px solid hsla(258, 100%, 62%, 0.3)' }}>
+                        {matchProfile.goal_emoji}
+                      </div>
+                    )}
                     <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background"
                       style={{ background: 'hsl(145 80% 50%)' }} />
                   </div>
@@ -399,10 +481,7 @@ const Dashboard = () => {
                 <button
                   onClick={() => navigate(`/chat/${match?.id}`)}
                   className="mt-3 w-full py-2.5 rounded-full text-sm font-bold text-foreground transition-all duration-300 active:scale-[0.97] flex items-center justify-center gap-2"
-                  style={{
-                    background: 'hsla(258, 60%, 40%, 0.25)',
-                    border: '1px solid hsla(258, 100%, 62%, 0.2)',
-                  }}
+                  style={{ background: 'hsla(258, 60%, 40%, 0.25)', border: '1px solid hsla(258, 100%, 62%, 0.2)' }}
                 >
                   <MessageCircle className="w-4 h-4 text-primary" />
                   Chat with {matchProfile.name.split(" ")[0]}
@@ -433,17 +512,14 @@ const Dashboard = () => {
         </div>
 
         {/* ===== GROUP CHAT ===== */}
-        <div className={fadeClass(4)} style={{ transitionDelay: '350ms' }}>
-          <button
-            onClick={() => navigate("/group-chat")}
+        <div className={fadeClass(5)} style={{ transitionDelay: '350ms' }}>
+          <button onClick={() => navigate("/group-chat")}
             className="w-full rounded-2xl p-4 text-left border border-border/40 transition-all duration-300 active:scale-[0.98]"
             style={{ background: 'hsla(258, 30%, 12%, 0.5)' }}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: 'hsla(258, 80%, 50%, 0.15)' }}
-                >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'hsla(258, 80%, 50%, 0.15)' }}>
                   <Users className="w-5 h-5 text-primary" />
                 </div>
                 <div>
@@ -458,7 +534,7 @@ const Dashboard = () => {
 
         {/* ===== TODAY'S TASK ===== */}
         {todayTask && (
-          <div className={fadeClass(5)} style={{ transitionDelay: '400ms' }}>
+          <div className={fadeClass(6)} style={{ transitionDelay: '400ms' }}>
             <div className="rounded-2xl p-5 border border-border/40" style={{ background: 'hsla(258, 30%, 12%, 0.5)' }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -466,36 +542,22 @@ const Dashboard = () => {
                   <span className="text-sm font-bold text-foreground">Today's Task</span>
                 </div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-primary/70 px-2.5 py-1 rounded-full"
-                  style={{ background: 'hsla(258, 80%, 50%, 0.12)' }}
-                >
-                  Day {todayTask.day}
-                </span>
+                  style={{ background: 'hsla(258, 80%, 50%, 0.12)' }}>Day {todayTask.day}</span>
               </div>
-
               <div className="flex items-start gap-3">
-                <button
-                  onClick={handleTaskComplete}
-                  disabled={taskComplete}
-                  className={cn(
-                    "mt-0.5 w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center transition-all duration-300",
-                    taskComplete
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border/60 hover:border-primary/60"
-                  )}
-                >
+                <button onClick={handleTaskComplete} disabled={taskComplete}
+                  className={cn("mt-0.5 w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center transition-all duration-300",
+                    taskComplete ? "border-primary bg-primary text-primary-foreground" : "border-border/60 hover:border-primary/60"
+                  )}>
                   {taskComplete && <Check className="w-3.5 h-3.5" />}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "text-sm font-semibold transition-all",
-                    taskComplete ? "text-muted-foreground line-through" : "text-foreground"
-                  )}>
+                  <p className={cn("text-sm font-semibold transition-all", taskComplete ? "text-muted-foreground line-through" : "text-foreground")}>
                     {todayTask.task}
                   </p>
                   <p className="text-xs text-muted-foreground/70 mt-1.5 leading-relaxed">{todayTask.detail}</p>
                 </div>
               </div>
-
               {taskComplete && (
                 <div className="mt-4 text-center py-2.5 rounded-xl" style={{ background: 'hsla(258, 80%, 50%, 0.1)' }}>
                   <p className="text-xs text-primary font-bold">✨ Great job! See you tomorrow.</p>
@@ -506,10 +568,9 @@ const Dashboard = () => {
         )}
 
         {/* ===== SMART NUDGE ===== */}
-        <div className={fadeClass(6)} style={{ transitionDelay: '450ms' }}>
+        <div className={fadeClass(7)} style={{ transitionDelay: '450ms' }}>
           <div className="rounded-2xl p-4 border border-secondary/20 relative overflow-hidden"
-            style={{ background: 'linear-gradient(135deg, hsla(25, 80%, 50%, 0.08) 0%, hsla(258, 40%, 15%, 0.4) 100%)' }}
-          >
+            style={{ background: 'linear-gradient(135deg, hsla(25, 80%, 50%, 0.08) 0%, hsla(258, 40%, 15%, 0.4) 100%)' }}>
             <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full blur-[40px] opacity-20"
               style={{ background: 'hsl(25 100% 55%)' }} />
             <div className="relative z-10">
@@ -522,8 +583,8 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* ===== TODAY'S MOTIVATION ===== */}
-        <div className={fadeClass(7)} style={{ transitionDelay: '500ms' }}>
+        {/* ===== MOTIVATION ===== */}
+        <div className={fadeClass(8)} style={{ transitionDelay: '500ms' }}>
           <div className="rounded-2xl p-4 border border-border/30" style={{ background: 'hsla(258, 20%, 10%, 0.4)' }}>
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-3.5 h-3.5 text-primary/70" />
@@ -542,14 +603,20 @@ const Dashboard = () => {
           {[
             { icon: Target, label: "Home", path: "/dashboard", active: true },
             { icon: Globe, label: "Wall", path: "/progress-wall", active: false },
-            { icon: Users, label: "Group", path: "/group-chat", active: false },
+            { icon: Users, label: "Friends", path: "/friends", active: false, badge: pendingFriendCount },
+            { icon: Trophy, label: "Rank", path: "/leaderboard", active: false },
             { icon: User, label: "Profile", path: "/profile", active: false },
           ].map((item) => (
             <button key={item.label} onClick={() => navigate(item.path)}
-              className="flex flex-col items-center gap-0.5 px-4 py-1.5 transition-colors"
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 transition-colors relative"
             >
               <item.icon className={cn("w-5 h-5", item.active ? "text-primary" : "text-muted-foreground/60")} />
               <span className={cn("text-[10px] font-bold", item.active ? "text-primary" : "text-muted-foreground/60")}>{item.label}</span>
+              {item.badge && item.badge > 0 && (
+                <span className="absolute -top-0.5 right-0 w-4 h-4 rounded-full bg-secondary text-secondary-foreground text-[8px] font-bold flex items-center justify-center">
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>

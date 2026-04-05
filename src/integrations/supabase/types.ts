@@ -144,6 +144,86 @@ export type Database = {
           },
         ]
       }
+      friend_group_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friend_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "friend_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friend_groups: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          invite_code: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          invite_code?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          invite_code?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      friend_requests: {
+        Row: {
+          created_at: string
+          id: string
+          receiver_id: string
+          sender_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          receiver_id: string
+          sender_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          receiver_id?: string
+          sender_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       group_messages: {
         Row: {
           content: string
@@ -200,6 +280,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           current_day: number
           deadline: string | null
@@ -212,8 +293,10 @@ export type Database = {
           streak: number
           updated_at: string
           user_id: string
+          xp: number
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           current_day?: number
           deadline?: string | null
@@ -226,8 +309,10 @@ export type Database = {
           streak?: number
           updated_at?: string
           user_id: string
+          xp?: number
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           current_day?: number
           deadline?: string | null
@@ -240,6 +325,7 @@ export type Database = {
           streak?: number
           updated_at?: string
           user_id?: string
+          xp?: number
         }
         Relationships: []
       }
