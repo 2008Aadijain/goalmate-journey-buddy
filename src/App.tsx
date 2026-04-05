@@ -11,6 +11,8 @@ import DirectChat from "./pages/DirectChat.tsx";
 import GroupChat from "./pages/GroupChat.tsx";
 import ProgressWall from "./pages/ProgressWall.tsx";
 import Profile from "./pages/Profile.tsx";
+import Leaderboard from "./pages/Leaderboard.tsx";
+import Friends from "./pages/Friends.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -30,6 +32,8 @@ const App = () => (
             <Route path="/group-chat" element={<GroupChat />} />
             <Route path="/progress-wall" element={<ProgressWall />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/friends" element={<Friends />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
