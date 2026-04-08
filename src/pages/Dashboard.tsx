@@ -254,17 +254,43 @@ const Dashboard = () => {
     return getSmartNudge(profile.goal_category, calculatedDay);
   }, [profile, calculatedDay]);
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCheckinPhoto(file);
+      setCheckinPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removePhoto = () => {
+    setCheckinPhoto(null);
+    setCheckinPhotoPreview(null);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
+
+    let photoUrl: string | null = null;
+    if (checkinPhoto) {
+      const ext = checkinPhoto.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      await supabase.storage.from("avatars").upload(path, checkinPhoto, { upsert: true });
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      photoUrl = publicUrl;
+    }
+
     const newStreak = profile.streak + 1;
-    const xpGain = 10 + (newStreak % 7 === 0 ? 50 : 0) + (newStreak === 30 ? 200 : 0);
+    const photoBonus = photoUrl ? 5 : 0;
+    const xpGain = 10 + photoBonus + (newStreak % 7 === 0 ? 50 : 0) + (newStreak === 30 ? 200 : 0);
     setTodayCheckedIn(true);
     await supabase.from("check_ins").insert({
       user_id: user.id, user_name: profile.name, goal_category: profile.goal_category,
       goal_label: profile.goal_label, goal_emoji: profile.goal_emoji,
-      content: checkinText, streak_at_time: newStreak,
+      content: checkinText, streak_at_time: newStreak, photo_url: photoUrl,
     });
     setCheckinText("");
+    removePhoto();
     await supabase.from("profiles").update({
       streak: newStreak,
       xp: (profile.xp ?? 0) + xpGain,
