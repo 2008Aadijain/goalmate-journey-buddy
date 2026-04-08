@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, Globe, User, Sparkles, MoreVertical, Trophy, Zap } from "lucide-react";
+import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, Globe, User, Sparkles, MoreVertical, Trophy, Zap, Camera, X } from "lucide-react";
 import { getDayTask } from "@/data/roadmaps";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
