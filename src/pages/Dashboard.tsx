@@ -448,6 +448,29 @@ const Dashboard = () => {
                   placeholder="What did you do today for your goal?"
                   className="w-full h-20 bg-transparent border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/30 resize-none transition-all"
                 />
+
+                {/* Photo preview */}
+                {checkinPhotoPreview && (
+                  <div className="mt-2 relative inline-block">
+                    <img src={checkinPhotoPreview} alt="Proof" className="w-20 h-20 rounded-xl object-cover border border-border/40" />
+                    <button onClick={removePhoto}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Photo upload button */}
+                <div className="mt-2 flex items-center gap-3">
+                  <button onClick={() => photoInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold glass-card text-muted-foreground hover:text-foreground transition-all">
+                    <Camera className="w-3.5 h-3.5" />
+                    Add proof 📸 (optional)
+                  </button>
+                  {checkinPhoto && <span className="text-[10px] text-primary font-semibold">+5 XP bonus!</span>}
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                </div>
+
                 <button
                   onClick={handleCheckin}
                   disabled={!checkinText.trim()}
@@ -461,7 +484,7 @@ const Dashboard = () => {
                       : 'none',
                   }}
                 >
-                  Check In ✅ (+10 XP)
+                  Check In ✅ (+10 XP{checkinPhoto ? " +5 📸" : ""})
                 </button>
               </>
             )}
