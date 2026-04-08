@@ -81,6 +81,7 @@ export type Database = {
           goal_emoji: string
           goal_label: string
           id: string
+          photo_url: string | null
           streak_at_time: number
           user_id: string
           user_name: string
@@ -92,6 +93,7 @@ export type Database = {
           goal_emoji?: string
           goal_label: string
           id?: string
+          photo_url?: string | null
           streak_at_time?: number
           user_id: string
           user_name: string
@@ -103,6 +105,7 @@ export type Database = {
           goal_emoji?: string
           goal_label?: string
           id?: string
+          photo_url?: string | null
           streak_at_time?: number
           user_id?: string
           user_name?: string
@@ -326,6 +329,45 @@ export type Database = {
           updated_at?: string
           user_id?: string
           xp?: number
+        }
+        Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          accent_color: string
+          created_at: string
+          font_size: string
+          id: string
+          language: string
+          notifications_enabled: boolean
+          reminder_time: string
+          theme: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accent_color?: string
+          created_at?: string
+          font_size?: string
+          id?: string
+          language?: string
+          notifications_enabled?: boolean
+          reminder_time?: string
+          theme?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accent_color?: string
+          created_at?: string
+          font_size?: string
+          id?: string
+          language?: string
+          notifications_enabled?: boolean
+          reminder_time?: string
+          theme?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
