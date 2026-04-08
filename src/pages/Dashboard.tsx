@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, Globe, User, Sparkles, MoreVertical, Trophy, Zap } from "lucide-react";
+import { Check, Flame, Target, Users, Calendar, ChevronRight, MessageCircle, Globe, User, Sparkles, MoreVertical, Trophy, Zap, Camera, X } from "lucide-react";
 import { getDayTask } from "@/data/roadmaps";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -77,6 +77,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
   const [checkinText, setCheckinText] = useState("");
+  const [checkinPhoto, setCheckinPhoto] = useState<File | null>(null);
+  const [checkinPhotoPreview, setCheckinPhotoPreview] = useState<string | null>(null);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [taskComplete, setTaskComplete] = useState(false);
   const [match, setMatch] = useState<Tables<"matches"> | null>(null);
@@ -86,6 +88,7 @@ const Dashboard = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [checkInDates, setCheckInDates] = useState<string[]>([]);
   const [pendingFriendCount, setPendingFriendCount] = useState(0);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -251,17 +254,43 @@ const Dashboard = () => {
     return getSmartNudge(profile.goal_category, calculatedDay);
   }, [profile, calculatedDay]);
 
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCheckinPhoto(file);
+      setCheckinPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removePhoto = () => {
+    setCheckinPhoto(null);
+    setCheckinPhotoPreview(null);
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
   const handleCheckin = async () => {
     if (!checkinText.trim() || !user || !profile || todayCheckedIn) return;
+
+    let photoUrl: string | null = null;
+    if (checkinPhoto) {
+      const ext = checkinPhoto.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      await supabase.storage.from("avatars").upload(path, checkinPhoto, { upsert: true });
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      photoUrl = publicUrl;
+    }
+
     const newStreak = profile.streak + 1;
-    const xpGain = 10 + (newStreak % 7 === 0 ? 50 : 0) + (newStreak === 30 ? 200 : 0);
+    const photoBonus = photoUrl ? 5 : 0;
+    const xpGain = 10 + photoBonus + (newStreak % 7 === 0 ? 50 : 0) + (newStreak === 30 ? 200 : 0);
     setTodayCheckedIn(true);
     await supabase.from("check_ins").insert({
       user_id: user.id, user_name: profile.name, goal_category: profile.goal_category,
       goal_label: profile.goal_label, goal_emoji: profile.goal_emoji,
-      content: checkinText, streak_at_time: newStreak,
+      content: checkinText, streak_at_time: newStreak, photo_url: photoUrl,
     });
     setCheckinText("");
+    removePhoto();
     await supabase.from("profiles").update({
       streak: newStreak,
       xp: (profile.xp ?? 0) + xpGain,
@@ -419,6 +448,29 @@ const Dashboard = () => {
                   placeholder="What did you do today for your goal?"
                   className="w-full h-20 bg-transparent border border-border/50 rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/30 resize-none transition-all"
                 />
+
+                {/* Photo preview */}
+                {checkinPhotoPreview && (
+                  <div className="mt-2 relative inline-block">
+                    <img src={checkinPhotoPreview} alt="Proof" className="w-20 h-20 rounded-xl object-cover border border-border/40" />
+                    <button onClick={removePhoto}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Photo upload button */}
+                <div className="mt-2 flex items-center gap-3">
+                  <button onClick={() => photoInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold glass-card text-muted-foreground hover:text-foreground transition-all">
+                    <Camera className="w-3.5 h-3.5" />
+                    Add proof 📸 (optional)
+                  </button>
+                  {checkinPhoto && <span className="text-[10px] text-primary font-semibold">+5 XP bonus!</span>}
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                </div>
+
                 <button
                   onClick={handleCheckin}
                   disabled={!checkinText.trim()}
@@ -432,7 +484,7 @@ const Dashboard = () => {
                       : 'none',
                   }}
                 >
-                  Check In ✅ (+10 XP)
+                  Check In ✅ (+10 XP{checkinPhoto ? " +5 📸" : ""})
                 </button>
               </>
             )}

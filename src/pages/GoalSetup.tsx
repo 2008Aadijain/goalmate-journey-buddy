@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Particles from "@/components/Particles";
 import { presetGoals } from "@/data/roadmaps";
@@ -12,14 +12,21 @@ import { useToast } from "@/hooks/use-toast";
 
 const GoalSetup = () => {
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  const { user, profile, loading, signUp } = useAuth();
   const { toast } = useToast();
   const [step, setStep] = useState<"goal" | "custom" | "deadline" | "signup">("goal");
   const [selectedGoal, setSelectedGoal] = useState<{ id: string; label: string; emoji: string; category?: string } | null>(null);
   const [customGoal, setCustomGoal] = useState("");
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [loading, setLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+
+  // If already logged in with profile, redirect to dashboard
+  useEffect(() => {
+    if (!loading && user && profile) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [loading, user, profile, navigate]);
 
   const handleGoalSelect = (goal: typeof presetGoals[0]) => {
     setSelectedGoal(goal);
@@ -40,7 +47,7 @@ const GoalSetup = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedGoal) return;
-    setLoading(true);
+    setFormLoading(true);
 
     const { error } = await signUp(form.email, form.password, {
       name: form.name,
@@ -51,7 +58,7 @@ const GoalSetup = () => {
       isCustom: selectedGoal.id === "custom",
     });
 
-    setLoading(false);
+    setFormLoading(false);
     if (error) {
       toast({ title: "Signup failed", description: error, variant: "destructive" });
       return;
@@ -60,6 +67,14 @@ const GoalSetup = () => {
   };
 
   const stepNumber = step === "goal" || step === "custom" ? 1 : step === "deadline" ? 2 : 3;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-5xl animate-pulse">🎯</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen hero-gradient relative overflow-hidden flex items-center justify-center px-4 py-12">
@@ -271,10 +286,10 @@ const GoalSetup = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={formLoading}
                 className="w-full glow-button text-primary-foreground py-4 text-lg font-bold disabled:opacity-60"
               >
-                {loading ? "Creating account..." : "Let's Go! 🔥"}
+                {formLoading ? "Creating account..." : "Let's Go! 🔥"}
               </button>
             </form>
 

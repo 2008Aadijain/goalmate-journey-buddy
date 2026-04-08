@@ -14,6 +14,7 @@ interface CheckIn {
   content: string;
   streak_at_time: number;
   created_at: string;
+  photo_url: string | null;
 }
 
 interface Reaction {
@@ -170,6 +171,9 @@ const ProgressWall = () => {
                 </div>
               </div>
               <p className="text-sm text-foreground/90 leading-relaxed mb-3">{ci.content}</p>
+              {ci.photo_url && (
+                <img src={ci.photo_url} alt="Check-in proof" className="w-full max-h-48 object-cover rounded-xl mb-3 border border-border/30" />
+              )}
               <div className="flex items-center gap-3">
                 <button onClick={() => toggleReaction(ci.id, "like")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${

@@ -1,9 +1,28 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Particles from "@/components/Particles";
 import FeatureCards from "@/components/FeatureCards";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { user, profile, loading } = useAuth();
+
+  // Returning users skip landing → go directly to dashboard
+  useEffect(() => {
+    if (!loading && user && profile) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [loading, user, profile, navigate]);
+
+  // Show nothing while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-5xl animate-pulse">🎯</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen hero-gradient relative overflow-hidden">
