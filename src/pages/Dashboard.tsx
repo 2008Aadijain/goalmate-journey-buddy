@@ -77,6 +77,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
   const [checkinText, setCheckinText] = useState("");
+  const [checkinPhoto, setCheckinPhoto] = useState<File | null>(null);
+  const [checkinPhotoPreview, setCheckinPhotoPreview] = useState<string | null>(null);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [taskComplete, setTaskComplete] = useState(false);
   const [match, setMatch] = useState<Tables<"matches"> | null>(null);
@@ -86,6 +88,7 @@ const Dashboard = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [checkInDates, setCheckInDates] = useState<string[]>([]);
   const [pendingFriendCount, setPendingFriendCount] = useState(0);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
